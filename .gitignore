@@ -1,0 +1,11 @@
+data/raw/
+data/interim/
+data/processed/
+logs/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+notebooks/*.ipynb

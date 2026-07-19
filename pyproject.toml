@@ -1,0 +1,14 @@
+[project]
+name = "predicto-forex"
+version = "0.1.0"
+description = "Research pipeline for systematic FX trading"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

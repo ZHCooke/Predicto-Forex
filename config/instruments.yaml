@@ -1,0 +1,49 @@
+# Symbol universe, timeframes and date ranges for ingestion.
+# Start narrow (per CLAUDE.md s5): validate the pipeline on EURUSD before scaling.
+
+defaults:
+  timeframe: 15min
+  offer_side: bid
+  start: 2015-01-01
+  end: 2026-07-01
+
+instruments:
+  EURUSD:
+    enabled: true
+    # pip size in price units — used for spread/cost modelling
+    pip: 0.0001
+    # broker spread assumption in pips (round-trip cost = 1x spread)
+    typical_spread_pips: 0.6
+
+  # G10 majors, enabled for the cross-pair currency-strength work (CLAUDE.md s7).
+  # Every one is USD-quoted or USD-based, which is what lets us decompose moves
+  # into a dollar factor plus per-currency strength.
+  GBPUSD:
+    enabled: true
+    pip: 0.0001
+    typical_spread_pips: 0.9
+
+  USDJPY:
+    enabled: true
+    pip: 0.01
+    typical_spread_pips: 0.7
+
+  AUDUSD:
+    enabled: true
+    pip: 0.0001
+    typical_spread_pips: 0.9
+
+  USDCHF:
+    enabled: true
+    pip: 0.0001
+    typical_spread_pips: 1.2
+
+  USDCAD:
+    enabled: true
+    pip: 0.0001
+    typical_spread_pips: 1.3
+
+  NZDUSD:
+    enabled: true
+    pip: 0.0001
+    typical_spread_pips: 1.5

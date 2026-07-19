@@ -1,0 +1,12 @@
+{
+  "hypothesis_id": "h001_daily_momentum_carry",
+  "description": "Daily EURUSD naive momentum (f_mom_12), fractional Kelly 0.25, min_edge=breakeven, real signed carry financing, measured 0.2-pip spread.",
+  "symbol": "EURUSD",
+  "timeframe": "1d",
+  "model": "naive_momentum",
+  "horizon": 1,
+  "predicted_net_sharpe": 0.4,
+  "tolerance": 0.5,
+  "rationale": "Research-only (2015-2022) walk-forward gives net Sharpe 0.794, CI [0.107,1.626], 6 folds, turnover 67/yr, non-degenerate. Out-of-sample decay of roughly half is typical for a single-feature price signal, so 0.40 is predicted rather than 0.79. Confirmation requires landing in [-0.10, 0.90] AND being positive. CAVEAT: ~33 configurations were searched over the FULL 2015-2026 sample in earlier sessions before this holdout was carved out, so the holdout is partially contaminated -- my priors saw it even though this formal selection did not.",
+  "created_utc": "2026-07-19T14:43:21.864968+00:00"
+}
