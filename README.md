@@ -1,64 +1,76 @@
 # Predicto-Forex
 
 Research pipeline for systematic FX trading: pull clean Dukascopy history,
-engineer leak-free features, and backtest models under walk-forward validation
-with transaction costs and explicit uncertainty.
+engineer leak-free features, and test hypotheses under statistical scrutiny
+strong enough to kill our own results.
 
-**Research only.** No broker integration, no live trading. See `CLAUDE.md` for
-the methodology rules this codebase is built to enforce.
+**Research only.** No broker integration, no live trading. `CLAUDE.md` §0 is
+the entry point — it carries current state, unfinished work, and the traps
+we've actually hit.
 
 ## Setup
 
 ```bash
 python -m venv .venv && .venv\Scripts\activate   # Windows
 pip install -r requirements.txt
-pytest
+pytest                                            # 200 tests
 ```
 
 ## Usage
 
 ```bash
-# 1. Pull data (idempotent — existing partitions are skipped)
-python -m src.ingest.fetch_dukascopy --symbol EURUSD --timeframe 15min \
-    --start 2025-06-01 --end 2025-06-30
+# 1. Pull data (idempotent — coverage-aware, safe to re-run)
+python -m src.ingest.fetch_dukascopy --symbol EURUSD --timeframe 1h \
+    --start 2015-01-01 --end 2026-07-01
 
-# 2. Validate it (non-zero exit if anything is structurally wrong)
-python -m src.ingest.validate_raw --symbol EURUSD --timeframe 15min
+# 2. Validate (non-zero exit if anything is structurally wrong)
+python -m src.ingest.validate_raw --symbol EURUSD --timeframe 1h
 
-# 3. Walk-forward backtest every baseline, net of costs
+# 3. Supporting data
+python -m src.ingest.fetch_fred            # interest rates
+python -m src.ingest.fetch_cot             # CFTC positioning
+python -m src.ingest.measure_spread        # hourly spread profile
+
+# 4. Walk-forward backtest, net of costs
 python -m src.run_pipeline --symbol EURUSD --timeframe 15min \
-    --train-size 800 --test-size 200
+    --train-size 20000 --test-size 5000
 ```
 
-Symbols, timeframes, date ranges, pip sizes and spread assumptions live in
-`config/instruments.yaml`.
+## Where the numbers come from
 
-## Layout
+Nothing here is assumed if it can be measured.
 
-| Path | Purpose |
-|---|---|
-| [src/ingest/fetch_dukascopy.py](src/ingest/fetch_dukascopy.py) | Dukascopy → partitioned parquet, retries, UTC normalization |
-| [src/ingest/validate_raw.py](src/ingest/validate_raw.py) | Gap / duplicate / OHLC / timezone checks. Reports, never repairs |
-| [src/features/build_features.py](src/features/build_features.py) | Momentum, vol, RSI, ATR, session encodings. Strictly backward-looking |
-| [src/models/baseline.py](src/models/baseline.py) | Buy-hold, random, momentum, mean-reversion, ridge |
-| [src/backtest/walk_forward.py](src/backtest/walk_forward.py) | Rolling / expanding splits with embargo |
-| [src/backtest/costs.py](src/backtest/costs.py) | Spread, slippage, swap |
-| [src/backtest/metrics.py](src/backtest/metrics.py) | Sharpe, Sortino, drawdown, Calmar + block-bootstrap CIs |
-| [src/backtest/engine.py](src/backtest/engine.py) | Fold → fit → predict → size → cost → metrics |
-| [src/sizing/kelly.py](src/sizing/kelly.py) | Fractional Kelly, hard-capped, with drawdown throttle |
+- **Spread is measured, not guessed.** EURUSD is 0.30 pips through most of the
+  day and 1.50 at the 21:00 UTC rollover — a 5× swing a flat constant cannot
+  represent.
+- **Prices are mid, not bid.** Bid-only quotes manufacture fake signal at
+  illiquid hours (t = 7.96 on bid vs 1.57 on mid for the same "effect").
+- **Costs amortize over the holding period.** A position held 7 bars pays one
+  round trip, not seven.
 
-## The three invariants
+## The five invariants
 
-Everything else is replaceable; these are not.
+Everything else is replaceable.
 
-1. **No lookahead.** Features at bar `t` use only data through `t`.
-   `tests/test_no_lookahead.py` corrupts the future and asserts no feature
-   value at or before the cut changes.
-2. **Positions are shifted one bar.** A signal from bar `t`'s close earns
-   `t`→`t+1`. `tests/test_engine.py::test_stale_signal_is_not_profitable`
-   fails loudly if that shift is ever dropped.
-3. **Net is always reported beside gross.** `BacktestResult.report()` prints
-   both plus a bootstrap CI; there is no code path that reports gross alone.
+1. **No lookahead.** Features at bar `t` use only data through `t`. Tests
+   corrupt the future and assert nothing before the cut moves.
+2. **Positions are shifted one bar.** A signal from `t`'s close earns `t`→`t+1`.
+3. **Net is always reported beside gross.**
+4. **Per-prediction significance before Sharpe.** Sharpe needs ~17 years to
+   resolve a 0.5 — it cannot adjudicate anything at this sample size.
+5. **The holdout (2023-01-01 onward) is sealed.** One look per pre-registered
+   hypothesis, and every access is logged.
 
-Invariants 1 and 2 have been mutation-tested — deliberately breaking each one
-makes the corresponding tests fail, so they are not passing vacuously.
+Invariants 1 and 2 are **mutation-tested** — deliberately breaking each makes
+the corresponding tests fail, so they are not passing vacuously.
+
+## Status
+
+**No validated edge.** A screen of 82 price/carry/strength features found one
+nominal hit where chance gives 4.1 — fewer than randomness produces. Momentum,
+mean-reversion, RSI, ATR, carry, currency strength and positioning are all
+rigorously null.
+
+The one survivor is not a price pattern: **intraday seasonality at the London
+open**, a structural flow effect. It is unspent and awaiting the holdout test.
+See `CLAUDE.md` §0.3.

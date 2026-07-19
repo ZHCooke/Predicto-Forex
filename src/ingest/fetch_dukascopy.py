@@ -78,6 +78,9 @@ OFFER_SIDE_MAP: dict[str, str] = {
     "ask": dukascopy_python.OFFER_SIDE_ASK,
 }
 
+# Sentinel: fetch both sides and average them. Not a Dukascopy constant.
+OFFER_SIDE_MID = "mid"
+
 
 def normalize_index(df: pd.DataFrame) -> pd.DataFrame:
     """Force a tz-aware UTC DatetimeIndex named 'timestamp', sorted, deduped."""
@@ -110,6 +113,19 @@ def fetch_range(
         raise KeyError(f"unknown symbol {symbol!r}; add it to INSTRUMENT_MAP")
     if timeframe not in INTERVAL_MAP:
         raise KeyError(f"unknown timeframe {timeframe!r}; add it to INTERVAL_MAP")
+    if offer_side not in OFFER_SIDE_MAP and offer_side != OFFER_SIDE_MID:
+        raise KeyError(f"unknown offer_side {offer_side!r}; use bid, ask or mid")
+
+    # Mid = average of both sides. This is the DEFAULT for a reason: bid-only
+    # prices manufacture fake signal at illiquid hours. Measured on EURUSD
+    # 2019-2022, the 20:00-London "effect" carried t = 7.96 on bid and t = 1.57
+    # on mid — the bid gaps and recovers while mid barely moves, producing a
+    # down-up pattern that no one can trade. A genuine effect (the London open)
+    # scored identically on both. See CLAUDE.md session 12.
+    if offer_side == OFFER_SIDE_MID:
+        bid = fetch_range(symbol, start, end, timeframe, "bid", max_attempts, retry_backoff_s)
+        ask = fetch_range(symbol, start, end, timeframe, "ask", max_attempts, retry_backoff_s)
+        return _to_mid(bid, ask)
 
     last_exc: Exception | None = None
     for attempt in range(1, max_attempts + 1):
@@ -138,12 +154,53 @@ def fetch_range(
     ) from last_exc
 
 
-def partition_path(symbol: str, timeframe: str, period: int | date) -> Path:
-    """Path for one partition. `period` is a year for bars, a date for ticks."""
+def _to_mid(bid: pd.DataFrame, ask: pd.DataFrame) -> pd.DataFrame:
+    """
+    Average bid and ask bars into mid bars, plus a measured `spread` column.
+
+    APPROXIMATION, STATED HONESTLY: the true mid-high is the maximum of the mid
+    price during the bar, which is not exactly (bid_high + ask_high) / 2 unless
+    the spread is constant through the bar. It is very close when spread is
+    stable and slightly overstates the range when spread widens intrabar. Open
+    and close are exact, since they are point-in-time. Since every return in
+    this project is computed from CLOSES, the approximation does not touch any
+    result — it only affects range-based features (ATR, position-in-range).
+
+    The `spread` column is a bonus: the actual bid-ask at each bar's close,
+    which is strictly better than the hourly-median profile we have been using
+    for cost modelling.
+    """
+    cols = [c for c in ["open", "high", "low", "close"] if c in bid.columns and c in ask.columns]
+    joined_index = bid.index.intersection(ask.index)
+    b, a = bid.loc[joined_index], ask.loc[joined_index]
+
+    mid = (b[cols] + a[cols]) / 2.0
+    if "volume" in b.columns and "volume" in a.columns:
+        mid["volume"] = b["volume"] + a["volume"]
+    mid["spread"] = a["close"] - b["close"]
+
+    dropped = len(bid) - len(joined_index)
+    if dropped:
+        log.info("mid: dropped %d bars present on only one side", dropped)
+    return mid
+
+
+def partition_path(
+    symbol: str, timeframe: str, period: int | date, offer_side: str = "bid"
+) -> Path:
+    """
+    Path for one partition. `period` is a year for bars, a date for ticks.
+
+    Mid partitions live under a separate `<timeframe>_mid` directory. Mixing
+    bid-based and mid-based bars in one folder would silently blend two price
+    conventions, and that difference is exactly what fabricated a t = 7.96
+    "signal" at rollover in session 12.
+    """
+    tf_dir = f"{timeframe}_mid" if offer_side == OFFER_SIDE_MID else timeframe
     if timeframe == "tick":
         assert isinstance(period, date), "tick partitions are day-level"
-        return RAW_DATA_DIR / symbol / "tick" / str(period.year) / f"{period}.parquet"
-    return RAW_DATA_DIR / symbol / timeframe / f"{period}.parquet"
+        return RAW_DATA_DIR / symbol / tf_dir / str(period.year) / f"{period}.parquet"
+    return RAW_DATA_DIR / symbol / tf_dir / f"{period}.parquet"
 
 
 def write_partition(df: pd.DataFrame, path: Path) -> Path:
@@ -188,7 +245,7 @@ def _pull_bars(
 ) -> None:
     """Year-by-year: bounded memory and natural checkpoints for long pulls."""
     for year in range(start.year, end.year + 1):
-        out_path = partition_path(symbol, timeframe, year)
+        out_path = partition_path(symbol, timeframe, year, offer_side)
 
         # Clamp the year window to the configured range so partial first/last
         # years don't silently pull data outside what was asked for.
@@ -225,7 +282,7 @@ def _pull_ticks(
     """Day-by-day. Weekends return empty and are skipped without writing."""
     day = start
     while day <= end:
-        out_path = partition_path(symbol, "tick", day)
+        out_path = partition_path(symbol, "tick", day, offer_side)
         if out_path.exists() and not overwrite:
             log.info("[%s][tick][%s] exists, skipping", symbol, day)
             day += timedelta(days=1)

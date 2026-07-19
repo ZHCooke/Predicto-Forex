@@ -12,6 +12,162 @@ until the backtest/validation stage is solid and reviewed.
 
 ---
 
+## 0. CURRENT STATE — READ THIS FIRST
+
+_Last updated 2026-07-19 (session 13). 200 tests passing._
+_Repo: github.com/ZHCooke/Predicto-Forex_
+
+### 0.1 Next action
+
+**The mid-price pull is COMPLETE** — all 7 pairs, 12/12 partitions,
+**501,772 bars**, 2015-01-01..2026-07-01, zero validation errors.
+
+Measured median spreads (from the new `spread` column, strictly better than the
+old hourly-median profile): EURUSD 0.30, USDJPY 0.40, GBPUSD 0.90, AUDUSD 1.00,
+USDCHF 1.00, NZDUSD 1.10, USDCAD 1.20 pips.
+
+**Next action: re-verify the s0.3 candidate on `1h_mid` data**, then
+pre-register and take the single holdout look. The candidate was established on
+bid data; it showed t = 1.976 (bid) vs 1.964 (mid) on a 2019-2022 subsample, so
+it is expected to hold, but the full-sample mid confirmation has not been run.
+
+To re-pull anything later, the fetcher is idempotent — `covers_range()` skips
+partitions that already cover their year and re-fetches ones that do not, so
+re-running is always safe:
+
+```bash
+for s in EURUSD GBPUSD USDJPY AUDUSD USDCHF USDCAD NZDUSD; do
+  python -c "
+from datetime import date
+from src.logging_setup import setup_logging
+from src.ingest.fetch_dukascopy import pull_symbol, OFFER_SIDE_MID
+setup_logging()
+pull_symbol('$s','1h',date(2015,1,1),date(2026,7,1),offer_side=OFFER_SIDE_MID)
+"
+done
+
+# verify
+for d in data/raw/*/1h_mid; do echo "$d: $(ls $d/*.parquet | wc -l)/12"; done
+```
+
+### 0.2 Where the project stands
+
+**No validated edge yet. One candidate is close and unspent.**
+
+Ten sessions of feature engineering produced essentially nothing: a screen of
+82 price/carry/strength features found **1 nominal hit at p < 0.05 where chance
+gives 4.1** — fewer than randomness produces. Momentum, mean-reversion, RSI,
+ATR, carry, rates, currency strength and dispersion are all rigorously null,
+not merely unproven.
+
+The single survivor is **not a price pattern**. It is intraday seasonality at
+the London open — a structural, flow-driven regularity. That is the signpost:
+signal in retail-accessible FX lives in how the market is ORGANISED (sessions,
+fixes, expiries), not in transforms of past prices.
+
+### 0.3 THE CANDIDATE (unspent, ready for holdout)
+
+**Short EURUSD at 08:00 London local time, hold 4 hours.**
+
+A pure calendar rule — **no fitted parameters**, nothing to overfit but the
+choice of hour, which came from a corrected screen.
+
+| metric | value |
+|---|---|
+| Gross edge | +2.856 pips per trade |
+| Round-trip cost | ~0.80 pips (measured) |
+| Net edge | ~+2.06 pips |
+| t-statistic | **5.872** (EURUSD, strictly non-overlapping) |
+| p-value | < 0.00001 |
+| Independent observations | 2,076 |
+| Net Sharpe (earlier 4h-grid backtest) | 0.873, CI [0.196, 1.588] |
+| Years positive | 8 / 8 |
+
+**Survived four independent attacks:**
+1. Mid-price check — identical on bid and mid (t 1.976 vs 1.964), so not a
+   bid-side quote artifact, unlike the rollover "signal" which collapsed from
+   t = 7.96 to 1.57.
+2. Overlap correction — degrades modestly (3.68 -> 3.28) rather than
+   collapsing, unlike COT which went from -3.75 to -0.74.
+3. Bonferroni over ~180 configurations.
+4. Stability — every one of 8 years positive.
+
+**Still to do before it can be believed:** re-verify on mid data (pending the
+pull above), then pre-register with a SHRUNK prediction (~0.5 Sharpe, not
+0.873, because the hour was selected from a table) and take the single holdout
+look.
+
+### 0.4 Data inventory (all under data/raw/, gitignored)
+
+| what | where | span | status |
+|---|---|---|---|
+| EURUSD M15 bid | `EURUSD/15min/` | 2015-2026, 286,701 bars | complete |
+| 7 majors 1h bid | `<PAIR>/1h/` | 2015-2026, ~71,700 each | complete |
+| 7 majors 1h MID | `<PAIR>/1h_mid/` | 2015-2026, 501,772 bars | complete, 0 errors |
+| FRED rates | `macro/` | DGS2, DGS10, DFF, ECBDFR | complete |
+| CFTC COT | `cot/` | 2014-2026, 654 wks x 7 ccy | complete |
+| Spread profile | `spread/EURUSD_hourly.json` | 2019-2022 measured | complete |
+
+Pairs: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCHF, USDCAD, NZDUSD.
+
+### 0.5 Methodology traps we have actually hit
+
+Every one of these produced a plausible-looking false result before being
+caught. They are the most valuable thing in this repo.
+
+1. **Overlapping forward returns fabricate significance.** An H-bar forward
+   return sampled every bar overlaps (H-1)/H; naive standard errors inflate by
+   ~sqrt(H). COT scored t = -3.75 overlapping and t = -0.74 non-overlapping.
+   Blocking by date fixes CROSS-SECTIONAL correlation and does nothing for
+   serial overlap — different problems, both need handling.
+   Guarded by `scoring.overlap_warning`.
+2. **Bid-only prices create fake signal at illiquid hours.** The bid gaps and
+   recovers at rollover while mid barely moves. t = 7.96 on bid, 1.57 on mid.
+   **Always use mid.**
+3. **Sharpe cannot resolve anything at this sample size.** Proving S = 0.5 is
+   real needs ~17 years; we have 11.5. Use per-prediction tests
+   (`signed_return_test`) to establish signal, and Sharpe only afterwards to
+   ask whether it survives costs.
+4. **Log loss is HALF as powerful as a directional test** for detecting a
+   calibrated edge (z 1.79 vs 3.58). It grades calibration, not direction.
+   Never optimise for it — it weights all observations equally while P&L
+   weights by move size.
+5. **A near-constant series passes `se > 0`.** Floating-point std ~1e-17 gave
+   t = 6.5e16, p = 0.0 from data containing no information. Degeneracy guards
+   need a threshold RELATIVE to the magnitude tested.
+6. **Filters that cost more than they save.** `min_edge` compared per-bar edge
+   to a full round-trip cost (~7x too strict); the session filter flattened
+   positions to avoid a spread it never paid, tripling turnover. Costs are
+   incurred on TRADES, not on exposure.
+7. **Existence-only idempotency corrupts data.** A partition that exists but
+   under-covers its year was silently skipped, nearly leaving 11 months missing
+   mid-dataset. Check coverage, not existence.
+8. **Prefix matching grabs the wrong instruments.** `startswith("EURO FX")`
+   also matched EUR/GBP and EUR/JPY cross-rate contracts.
+9. **A pre-registration framework that rubber-stamps degenerate results is
+   worse than none.** h001 scored "within tolerance" while trading in 0.89% of
+   bars. Confirmation now requires a clean degeneracy report.
+
+### 0.6 Search budget
+
+~180 configurations tested. Bonferroni alpha ~0.0003. Any new candidate must
+clear the corrected threshold on the `signed_return_test` gate BEFORE its
+Sharpe is taken seriously (see s8, s10).
+
+### 0.7 What has been ruled out
+
+- All price-derived features, unconditionally (s11 screen).
+- Regime conditioning — 0 of 7 interactions significant; signals are not
+  cancelling across vol regimes, they are absent (s12).
+- Rates/carry as a directional predictor (s4).
+- COT positioning, once overlap is corrected (s13).
+- Calibration and ensembling as fixes — both made results worse; the binding
+  constraint is sample size and signal strength, not model sophistication (s8).
+- Structural calendar features other than sessions — month-end, quarter-end,
+  option expiry all flat (s12).
+
+---
+
 ## 1. Data Sources
 
 ### Primary: Dukascopy tick data
@@ -44,35 +200,68 @@ of truth.
 
 ## 2. Project Structure
 
+**AS BUILT** (the sketch this section originally contained is superseded).
+Run everything from the repo root; `pyproject.toml` sets `pythonpath = ["."]`.
+
 ```
-fx-research/
-├── CLAUDE.md                  # this file — keep updated each session
-├── README.md                  # short human-facing summary
-├── pyproject.toml / requirements.txt
-├── config/
-│   └── instruments.yaml       # symbol list, timeframes, date ranges
-├── data/
-│   ├── raw/                   # untouched pulls from dukascopy-python, gitignored
-│   ├── interim/                # cleaned/resampled bars, gitignored
-│   └── processed/              # feature matrices ready for modeling, gitignored
+Predicto-Forex/
+├── CLAUDE.md                     # this file — s0 is the entry point
+├── README.md
+├── pyproject.toml, requirements.txt, .gitignore
+├── config/instruments.yaml       # 7 majors: pip size, spread, date range
+├── preregistrations/*.json       # committed hypotheses (h001 spent, INCONCLUSIVE)
+├── data/raw/                     # gitignored — see s0.4 inventory
+├── logs/                         # gitignored, INCLUDING holdout_access.log (see below)
 ├── src/
+│   ├── config.py                 # paths + instruments.yaml loader
+│   ├── logging_setup.py
+│   ├── run_pipeline.py           # end-to-end entrypoint
 │   ├── ingest/
-│   │   ├── fetch_dukascopy.py  # wraps dukascopy-python, handles retries/rate limits
-│   │   └── validate_raw.py     # gap detection, duplicate ticks, timezone checks
+│   │   ├── fetch_dukascopy.py    # bid/ask/MID, retries, coverage-aware idempotency
+│   │   ├── validate_raw.py       # tz/gap/duplicate/OHLC checks; exits non-zero
+│   │   ├── fetch_fred.py         # DGS2/DGS10/DFF/ECBDFR, 1-day publication lag
+│   │   ├── fetch_cot.py          # CFTC positioning, 6-day release lag
+│   │   └── measure_spread.py     # hourly spread profile from bid vs ask
 │   ├── features/
-│   │   └── build_features.py   # returns, realized vol, technical/microstructure features
+│   │   ├── build_features.py     # price features, resample_bars, assemble_dataset
+│   │   ├── currency_strength.py  # cross-pair decomposition (exact to 2e-17)
+│   │   └── structural.py         # DST-aware sessions, month-end, expiry
 │   ├── models/
-│   │   ├── baseline.py         # simple benchmarks (buy-hold, random, naive momentum)
-│   │   └── ...                 # actual model(s) — TBD by strategy
+│   │   ├── baseline.py           # buy-hold, random, momentum, mean-rev, ridge
+│   │   ├── calibration.py        # isotonic (imported from AFL; did not help)
+│   │   ├── ensemble.py           # feature-family ensemble + agreement filter
+│   │   └── cross_sectional.py    # currency-weight book, minimum-norm netting
 │   ├── backtest/
-│   │   ├── walk_forward.py     # rolling/expanding window train-test splits
-│   │   ├── costs.py            # spread, slippage, swap/rollover modeling
-│   │   └── metrics.py          # Sharpe, max drawdown, Calmar, hit rate, etc.
-│   └── sizing/
-│       └── kelly.py            # position sizing — reuse logic from sports betting pipeline
-├── notebooks/                  # exploratory only, nothing here feeds production
-├── tests/
-└── logs/
+│   │   ├── engine.py             # THE execution convention lives here
+│   │   ├── walk_forward.py       # rolling/expanding splits with embargo
+│   │   ├── costs.py              # hour-aware spread, amortized breakeven, carry
+│   │   ├── metrics.py            # Sharpe/Sortino/DD + block-bootstrap CIs
+│   │   ├── scoring.py            # per-prediction tests — THE POWERFUL GATE
+│   │   └── holdout.py            # seal, pre-registration, access log
+│   ├── sizing/kelly.py           # fractional Kelly, capped, drawdown throttle
+│   └── analysis/
+│       ├── feature_screen.py     # corrected screen across families/timeframes
+│       └── regime.py             # conditional + interaction tests
+└── tests/                        # 200 tests
+```
+
+**Known gap:** `logs/` is gitignored, so `logs/holdout_access.log` — the audit
+trail of how many times the holdout has been read — is NOT version controlled
+and can be silently deleted. That record is what makes pre-registration
+meaningful. Consider un-ignoring it.
+
+### 2a. Common commands
+
+```bash
+pytest -q                                    # 200 tests
+python -m src.ingest.fetch_dukascopy --symbol EURUSD --timeframe 1h \
+       --start 2015-01-01 --end 2026-07-01   # idempotent; add --overwrite to force
+python -m src.ingest.validate_raw --symbol EURUSD --timeframe 1h
+python -m src.ingest.fetch_fred                       # rates
+python -m src.ingest.fetch_cot --refresh              # positioning
+python -m src.ingest.measure_spread --symbol EURUSD   # hourly spread profile
+python -m src.run_pipeline --symbol EURUSD --timeframe 15min \
+       --train-size 20000 --test-size 5000
 ```
 
 ---
@@ -880,3 +1069,429 @@ bar, CIs still straddle zero. Nothing here justifies a holdout look.
    in the FX factor literature and the only move that attacks sample size.
 2. Intraday (4h) cross-pair strength: ~6x more bars, though costs bite harder.
 3. Accept ~0.26 is what this signal is worth and revisit the s8 bar.
+
+### 2026-07-19 (session 9) — Cross-sectional portfolio; first candidate to meet the bar
+
+Built `src/models/cross_sectional.py`: currency strength -> demeaned
+cross-sectional scores -> per-currency weights -> minimum-norm pair trades.
+152 tests passing. Repo pushed to github.com/ZHCooke/Predicto-Forex.
+
+**Terminology bug caught by a test.** I conflated two meanings of
+"dollar-neutral": the equity sense (net notional cancels) and the FX sense
+(zero USD exposure). Demeaning gives the former, NOT the latter — USD is scored
+like any other currency, so reversion shorts it when it has run up. That is a
+deliberate view. A test asserting zero USD exposure would have been asserting
+the strategy has no opinion. Diagnostics now report both separately.
+
+**Book behaves as designed:** replication residual 0.0, net exposure 0.0,
+netting ratio 0.873 (netting saves ~13% of gross trading), mean |USD| exposure
+0.127.
+
+**I OVERSTATED the sample-size argument and should correct it.** I said seven
+pairs gives "~7x the observations". For estimating a portfolio Sharpe it does
+not: the seven pairs collapse into ONE daily portfolio return, so the time
+series is still ~2,400 points. What we actually gain is DIVERSIFICATION —
+several partially-independent bets per day lowers portfolio vol for the same
+edge. Real, and it showed up (max drawdown fell to -0.07 from single-pair
+levels, Sharpe rose), but it is not extra statistical power along the time axis,
+and the CI barely tightened.
+
+**Halflife sweep (research data, costs per-pair from config):**
+
+| halflife | gross Sharpe | net Sharpe | turnover | 95% CI |
+|---|---|---|---|---|
+| 20 | 0.498 | 0.387 | 61.2 | [-0.198, 0.973] |
+| 60 | 0.516 | 0.449 | 37.6 | [-0.126, 1.015] |
+| 90 | 0.550 | 0.494 | 31.9 | [-0.084, 1.050] |
+| **120** | **0.573** | **0.524** | **28.7** | **[-0.079, 1.104]** |
+
+Monotone in halflife, and GROSS Sharpe rises too — so this is not purely a
+cost-reduction artifact; slower signals genuinely look better here.
+
+**A structural advantage over everything tested before: the strategy has NO
+FITTED PARAMETERS.** It is purely rules-based (decompose, demean, invert,
+normalise). There is no train/test fitting and therefore no model overfitting —
+which is why it holds its shape where ridge swung from +0.36 to -0.53.
+
+**Verdict vs s8 — the first candidate to pass all four, WITH CAVEATS:**
+- (1) Net Sharpe > 0.5 — PASSES at halflife 120 (0.524).
+- (2) Turnover > 20/yr — passes (28.7).
+- (3) Stable — passes; monotone and smooth across halflives, no fitted params.
+- (4) No degeneracy — passes.
+
+**Why this is still not a result:**
+1. **The CI includes zero** ([-0.079, 1.104]). The s8 criteria never required a
+   CI excluding zero — that is a GAP IN THE BAR WE SET, visible only now that
+   something has crossed it. At Bonferroni alpha 0.0006 (~84 configs) this is
+   nowhere near significant.
+2. **Halflife 120 was chosen as the argmax of a sweep.** Selecting the best of
+   six and reporting it is exactly the error the bar exists to prevent.
+3. **Effective sample is ~20 independent observations.** A 120-day halflife
+   means the signal turns over roughly twenty times in eight years. A Sharpe of
+   0.52 on ~20 effective bets is weak evidence regardless of the point estimate.
+
+**Recommendation: this is the first candidate worth spending the holdout on.**
+Pre-register a slow cross-sectional reversion book (halflife 90-120) with a
+predicted net Sharpe, then take the single permitted look. NOT yet done —
+spending the holdout is irreversible and is the owner's call.
+
+**SUPERSEDED BY SESSION 10 — do not act on the above. Per-prediction scoring
+shows the halflife-120 candidate has no directional skill; the 0.524 was noise.**
+
+---
+
+## 10. Per-Prediction Scoring — the power problem, solved
+
+`src/backtest/scoring.py`. Owner's suggestion, and it broke a genuine deadlock.
+
+**The problem it solves.** Sharpe compresses a year into one number, so 8 years
+gives ~8 effective observations and needs ~17 years to prove S = 0.5. Every
+result in this project had a CI straddling zero for that reason alone.
+Per-prediction scoring grades every forecast individually: **2,499 effective
+observations** (17,493 raw forecasts, blocked by date) instead of ~8.
+
+**Design decisions, and what the AFL module actually does.**
+PL-AFL-Module computes log loss / Brier / ROC-AUC per round and accumulates
+them, but **never fits to them** — its models are regressions on margin, with
+probabilities from calibration afterwards. We copied that deliberately.
+Optimising for log loss would be optimising AGAINST profitability, because log
+loss weights every observation equally whereas P&L weights by the size of the
+move. A model tuned for log loss would buy accuracy on many tiny moves at the
+cost of the few large ones that pay for the spread.
+
+**Measured correction to my own claim: log loss is NOT the most powerful test.**
+For a calibrated 54% forecaster over 2,000 observations:
+accuracy z = 3.58, log-loss z = **1.79** — half the power. A small calibrated
+edge barely moves the loss (edge ~ 2*(p-0.5)^2) while outcome noise stays large.
+Log loss earns its place by grading CALIBRATION, not by detecting direction.
+`signed_return_test` is therefore the primary test: it weights by move size,
+which is the economically meaningful quantity.
+
+**A real bug caught here — a fabricated significance.** The degenerate-variance
+guard used `se > 0`. A constant loss series has floating-point std ~1e-17, which
+passes, producing **t = 6.5e16, p = 0.0** from data containing no information.
+Now guarded with a threshold relative to the magnitude tested. This is exactly
+the class of error that manufactures false discoveries.
+
+**Blocking matters and is easy to get wrong.** Correlated same-day forecasts
+must count as one unit. Note the subtlety found while testing: correlating the
+DIRECTION called does nothing — the losses only correlate if CORRECTNESS is
+shared across the day, which is what a common-factor day looks like in FX.
+
+### Result: the halflife-120 candidate has no directional skill
+
+Cross-sectional reversion, research data, all seven pairs scored per-pair-per-day:
+
+| halflife | accuracy | log-loss edge | signed-return t | p |
+|---|---|---|---|---|
+| 3 | 0.5077 | -0.0284 | 1.557 | 0.120 |
+| **5** | **0.5075** | -0.0169 | **1.580** | **0.114** |
+| 20 | 0.4961 | -0.0058 | 0.654 | 0.513 |
+| 60 | 0.4949 | -0.0036 | 0.476 | 0.634 |
+| **120** | **0.4967** | -0.0031 | 1.042 | 0.298 |
+
+**Nothing reaches significance at any halflife.** Best is p = 0.114 at halflife
+5, against a Bonferroni alpha of 0.0006 after ~84 configurations.
+
+**The decisive detail: halflife 120 — the setting that produced net Sharpe
+0.524 and "passed" all four s8 criteria — has directional accuracy of 49.67%,
+BELOW a coin flip.** Its apparent profitability was not predictive skill.
+Short halflives (3-5) show the only hint of genuine direction (50.8%), and even
+that is not significant.
+
+**Log-loss edge is negative at every halflife**, i.e. our probability forecasts
+are systematically OVERCONFIDENT. That independently confirms the session-8
+hypothesis about miscalibrated magnitudes feeding Kelly — now measured rather
+than assumed.
+
+### Consequences for the two open decisions
+
+1. **Do NOT spend the holdout on this candidate.** It fails a far more powerful
+   test on research data we are still free to use. Spending the one clean look
+   on it would waste it.
+2. **The "17 years" objection is retired.** We now have a significance test with
+   ~2,499 effective observations. A future candidate can be adjudicated on
+   research data BEFORE the holdout is touched — which is the correct order and
+   was not previously possible.
+
+**New gate, to sit ahead of s8:** any candidate must clear `signed_return_test`
+on research data (p below the Bonferroni-corrected threshold) BEFORE its Sharpe
+is taken seriously or the holdout is opened. Sharpe is now the second filter,
+not the first.
+
+---
+
+### 2026-07-19 (session 11) — Full feature screen; ONE survivor
+
+`src/analysis/feature_screen.py`. Every feature family (price, carry, strength)
+at daily and 4h, signed-return test, pooled across pairs, blocked by date,
+research data only. 82 tests, Bonferroni over 82 + 84 prior configs -> alpha
+0.000301.
+
+**The corpus is empty.** Only **1 of 82** features passed even an UNCORRECTED
+p < 0.05, where 4.1 would be expected by chance. Fewer nominal hits than chance
+produces is strong evidence there is essentially no directional information in
+anything we built: momentum, mean-reversion, RSI, ATR, carry, rates changes,
+currency strength, dispersion, dollar factor. Ten sessions of feature work,
+now rigorously null rather than inconclusively null.
+
+`f_ccy_diff_5` (the session-9 candidate) came in at t = -1.41, p = 0.16.
+Confirms the session-10 verdict.
+
+**The single survivor: `f_hour_cos` at 4h, t = 4.34, p < 0.0001.** Intraday
+seasonality, not a model feature.
+
+**Two corrections while chasing it down.**
+1. Not a rollover artifact — survives excluding the 20:00 bar (t = 3.92).
+2. My first read blamed the 16:00 bar. WRONG: four pairs are XXXUSD and three
+   are USDXXX, so pooling raw pair returns mixes directions. Re-expressed in
+   USD terms, 16:00 is insignificant (t = -0.88) and the real effect is at
+   **08:00 UTC, the London open (t = 4.92)** — USD strengthens systematically.
+
+**Why only EURUSD can harvest it.** The effect is positive on all seven pairs
+gross, but only EURUSD's spread is tight enough:
+
+| pair | gross (pips) | t | round-trip cost | net |
+|---|---|---|---|---|
+| **EURUSD** | **2.186** | **4.01** | 0.80 | **+1.386** |
+| USDCAD | 1.016 | 2.15 | 1.70 | -0.684 |
+| USDJPY | 1.010 | 2.13 | 1.10 | -0.090 |
+| others | 0.86-1.10 | 1.2-1.7 | 1.3-1.9 | negative |
+
+### The candidate: short EURUSD in the 08:00-12:00 UTC bar
+
+A CALENDAR RULE with **no fitted parameters** — nothing to overfit but the hour.
+
+| metric | value |
+|---|---|
+| Gross Sharpe | 1.376 |
+| **Net Sharpe** | **0.873** |
+| **Net Sharpe 95% CI** | **[0.196, 1.588]** — EXCLUDES ZERO |
+| Annual return | 3.4% (unlevered) |
+| Max drawdown | -7.6% |
+| Trades | 247/yr |
+| Years positive (gross) | **8 / 8** |
+
+**First CI in this project to exclude zero.** Clears every gate: the corrected
+signed-return screen, Sharpe > 0.5, turnover > 20, stability, no degeneracy.
+
+**Honest caveats before anyone gets excited:**
+1. **Selection.** The hour was read off a six-row table and EURUSD chosen
+   because it is the only affordable pair — an implicit 6 x 7 = 42 choices on
+   top of the 82-feature screen. Bonferroni over 42 gives alpha 0.0012;
+   t = 4.01 implies p ~ 0.00006, so it still clears, but the margin is smaller
+   than the headline p-value suggests.
+2. **DST is unhandled.** London opens at 07:00 UTC in summer and 08:00 in
+   winter; our fixed 4h buckets ignore this, so the estimate mixes two regimes.
+   The effect may be stronger with DST-aware bucketing — or the current number
+   may be flattered by it. Must be checked.
+3. **This is a KNOWN effect.** Intraday FX seasonality around the London open
+   is documented. Reassuring for validity, but it means we are rediscovering,
+   not discovering, and known effects decay as they are crowded.
+4. **3.4% unlevered** is modest in absolute terms.
+5. **Not yet tested on the holdout.**
+
+**Recommendation: THIS is the candidate to spend the holdout on.** Pre-register
+"short EURUSD 08:00-12:00 UTC" with a predicted net Sharpe (shrunk for
+selection — suggest 0.5, not 0.873), fix the DST handling first, then take the
+single permitted look.
+
+---
+
+### 2026-07-19 (session 12) — Structural features, regime tests, and a data-quality bug
+
+Built `src/features/structural.py` (DST-aware sessions, month/quarter-end,
+expiry, day-of-week) and `src/analysis/regime.py` (trailing-quantile regimes,
+conditional and interaction tests). 186 tests passing.
+
+**Datasets confirmed reachable (all free):**
+- FRED `VIXCLS` (1990-), `T10Y2Y` yield curve (1976-) — full history.
+- FRED `SP500` only goes back to 2016 and `BAMLH0A0HYM2` to 2023 — both
+  truncated by FRED, unusable for our 2015 start. VIX covers the equity-stress
+  regime anyway, being derived from SPX options.
+- **CFTC COT positioning IS accessible** — the plain URL 403s, but it works
+  with a `User-Agent` header; yearly history zips at
+  `cftc.gov/files/dea/history/fut_fin_txt_<year>.zip`. Not yet integrated.
+
+**Structural features: nothing survives correction.** 19 tests, cumulative
+alpha 0.00027. Best was `f_sess_london_open` (t = 2.68) and `f_is_year_end`
+(t = -2.65); 2 nominal hits where 1.0 is expected by chance. Month-end,
+quarter-end and option-expiry flags are all flat.
+
+**Regime conditioning: the hypothesis is REFUTED, not merely unproven.**
+0 of 7 interactions significant (0.4 expected by chance) for momentum,
+z-score, RSI, currency strength, dispersion and 1-bar return across
+low/high realised-vol regimes. Signals are not cancelling across regimes —
+they simply are not there. This closes the methodological gap flagged in
+session 11: it was a real gap, and it was not the explanation.
+
+### A genuine data-quality bug: BID-ONLY PRICES CREATE FAKE SIGNAL
+
+The 1h scan showed enormous t-statistics clustered in the rollover window
+(+8.6 at 20:00 London, -8.3 at 22:00, +5.1 at 23:00) with alternating signs —
+the signature of a quote dislocation that mean-reverts, not a tradeable effect.
+
+We have used `OFFER_SIDE_BID` throughout. Re-running EURUSD 2019-2022 on MID
+prices (bid/ask average):
+
+| London hour | bid t | mid t | effect |
+|---|---|---|---|
+| 20 | **7.96** | **1.57** | collapses ~80% |
+| 21 | -4.63 | -1.49 | collapses |
+| 22 | -6.49 | -3.95 | halves |
+| **8 (London open)** | **1.976** | **1.964** | **unchanged** |
+
+**The rollover "signal" was almost entirely a bid-side artifact.** At thin
+liquidity the bid gaps and recovers while mid barely moves, manufacturing a
+down-up pattern that is not tradeable. Had we screened at 1h earlier and not
+checked, this would have been a confident false discovery.
+
+**The London-open effect is NOT an artifact** — it is identical on bid and mid,
+which is exactly what a real flow-driven effect should look like.
+
+**ACTION REQUIRED: switch the pipeline to mid prices.** `fetch_dukascopy`
+should pull both sides and store mid (or store both). Everything touching
+illiquid hours is suspect until this is done. Liquid-hours results (including
+the London-open candidate) are unaffected.
+
+### Status of the London-open candidate after DST correction
+
+Tested properly at 1h resolution with DST-aware local-time flags:
+- 08:00-10:00 London -> forward **4h** return: t = 3.683, p = 0.00023, +1.09 pips
+- 08:00-10:00 London -> forward **1h** return: t = 0.877, p = 0.38
+
+So it is a session-length phenomenon, not an hourly one — consistent with
+flow accumulating over the London morning. p = 0.00023 sits just inside the
+cumulative Bonferroni alpha of 0.00027, i.e. it survives, but marginally.
+
+Note the DST-aware 4h test was WEAKER (t = 2.68) than the fixed-UTC version
+(t = 4.92). That is a resolution artifact, not a contradiction: 4h bars sit on
+fixed UTC boundaries, so a DST-shifted local session cannot be represented
+cleanly on that grid. The 1h test above is the correct one.
+
+**Next:**
+1. Switch to mid prices — data integrity, blocks everything else.
+2. Integrate COT positioning (the one genuinely new data source available free).
+3. Re-verify the London-open candidate on mid prices, then pre-register.
+
+---
+
+### 2026-07-19 (session 13) — Mid prices, COT, and the overlapping-returns trap
+
+200 tests passing.
+
+**1. Mid prices.** `fetch_dukascopy` now supports `offer_side="mid"`, fetching
+both sides and averaging, plus a measured `spread` column (better than the
+hourly-median profile we were using). Mid partitions live under
+`<timeframe>_mid/` so the two price conventions can never be silently blended.
+Documented approximation: mid-high is the average of bid-high and ask-high,
+which is exact only if spread is constant intrabar — irrelevant to any result
+here, since every return is computed from CLOSES, which are exact.
+
+**2. CFTC COT integrated** (`src/ingest/fetch_cot.py`). Weekly speculative
+positioning for all seven currencies, 2014-2026, 654 observations each.
+
+Two data bugs found and fixed:
+- **Prefix matching was wrong.** `startswith("EURO FX")` also matched
+  "EURO FX/BRITISH POUND XRATE" and "EURO FX/JAPANESE YEN XRATE" — different
+  instruments entirely — silently doubling EUR to 1407 rows. Now exact
+  full-contract-name matching.
+- **NZD appeared to end in 2022.** CFTC renamed the contract from
+  "NEW ZEALAND DOLLAR" to "NZ DOLLAR"; both names are now mapped.
+
+Publication lag handled: the report snapshots Tuesday but publishes Friday
+15:30 ET, so `align_to_bars` releases it from the following Monday
+(`release_lag_days=6`), and lags under 4 days raise.
+
+### THE MAIN FINDING: overlapping forward returns fabricate significance
+
+COT positioning at a 1-month horizon looked like the best result in the project:
+`f_cot_diff_lev` t = **-3.75**, p = 0.0002, with **11 of 39 features nominally
+significant where 2 are expected** — a coherent contrarian cluster, exactly the
+documented hypothesis. It cleared the cumulative Bonferroni threshold and was
+headed for the holdout.
+
+It is an artifact. A 20-day forward return sampled daily overlaps 95% with its
+neighbours; blocking by date fixes CROSS-SECTIONAL correlation but does nothing
+for SERIAL overlap.
+
+| sampling | t | p | n_eff |
+|---|---|---|---|
+| blocked by date (overlapping) | **-3.75** | 0.0002 | 2382 |
+| blocked by month | -1.19 | 0.238 | 93 |
+| **strictly non-overlapping** | **-0.74** | **0.461** | 120 |
+
+The entire result came from counting 2,382 overlapping observations as
+independent when there were about 120. **COT positioning shows nothing.**
+
+Guarded in `scoring.py`: `signed_return_test` takes `horizon_bars` and emits an
+`overlap_warning` estimating the sqrt(H) inflation, with a regression test.
+
+### The London-open candidate SURVIVES the same test
+
+Re-checked, since it also used a multi-bar (4h) forward return:
+
+| sampling | t | p | n_eff |
+|---|---|---|---|
+| blocked by bar (overlapping) | 3.683 | 0.00023 | 4152 |
+| blocked by day | 2.945 | 0.00327 | 2077 |
+| **one bar/day, non-overlapping** | **3.282** | 0.00105 | 2077 |
+| **EURUSD alone, non-overlapping** | **5.872** | **<0.00001** | 2076 |
+
+It degrades modestly rather than collapsing — the signature of a real effect.
+EURUSD alone gives **+2.856 pips gross against ~0.8 pips cost** on 2,076
+strictly independent daily observations.
+
+Note this also resolves the session-12 confusion about DST making things worse:
+measured at 1h resolution the DST-aware version is STRONGER (2.856 vs 2.186
+pips). The earlier weakening was purely the 4h fixed-UTC grid being unable to
+represent a DST-shifted session.
+
+**The candidate has now survived four independent attacks:** mid-price check,
+overlap correction, Bonferroni over ~180 configurations, and 8/8 positive years.
+
+**Next:** finish the mid-price pull (5/7 done), re-verify the candidate on mid
+data, then pre-register and take the single holdout look.
+
+---
+
+## 14. Session Index
+
+Quick map of where each finding lives. Sessions are dated entries in s6 above
+plus the numbered sections.
+
+| # | What happened | Key outcome |
+|---|---|---|
+| 1 | Repo scaffolded, invariants mutation-tested | Pipeline validated in both directions (oracle profits, stale signal loses) |
+| 2 | Multi-year data pulled | Partition idempotency bug found — existence-only check nearly left an 11-month hole |
+| 3 | Costs diagnosed | Required IC is 0.19 at M15 vs ~0.02 daily. Horizon, not model, was the problem |
+| 4 | FRED rates wired in | Rates do not predict spot direction. Carry mis-specified as a cost, then fixed |
+| 5 | Holdout sealed at 2023-01-01 | h001 pre-registered and evaluated: INCONCLUSIVE (traded 0.89% of bars) |
+| 6 | Cost-side bugs fixed | `min_edge` was ~7x too strict; session filter cost more than it saved. Earlier results were biased pessimistic |
+| 7 | Cross-pair currency strength built | Decomposition exact to 2e-17; economically coherent (GBP weakest post-Brexit, CHF strongest) |
+| 8 | AFL imports (calibration, ensemble) | Both made results WORSE. Constraint is sample size, not model sophistication |
+| 9 | Cross-sectional portfolio | Net Sharpe 0.524 at halflife 120 — passed all four criteria, later shown to be noise |
+| 10 | Per-prediction scoring built | Sharpe cannot resolve anything here (~17 years needed). The halflife-120 candidate had 49.67% accuracy — below a coin flip |
+| 11 | Full 82-feature screen | **The corpus is empty**: 1 nominal hit where chance gives 4.1. One survivor: London-open seasonality |
+| 12 | Structural + regime tests | Regime conditioning refuted (0/7). **Bid-only prices fabricate signal at rollover** |
+| 13 | Mid prices, COT, overlap trap | **COT's t = -3.75 was overlap artifact** (-0.74 corrected). London-open candidate survived |
+
+---
+
+## 15. If You Are Picking This Up Cold
+
+1. Read **s0** — current state, unfinished pull, the candidate.
+2. Read **s0.5** — the nine traps. Each one produced a convincing false result
+   before it was caught, and most are not obvious in advance.
+3. Run `pytest -q` (expect 200 passing) to confirm the environment.
+4. Finish the pull in **s0.1** if it is still incomplete.
+5. Do NOT touch the holdout without a pre-registration (`src/backtest/holdout.py`
+   enforces this and logs every access).
+6. Any new idea gets tested with `signed_return_test` on RESEARCH data first,
+   with overlap handled, before its Sharpe means anything.
+
+The honest summary after thirteen sessions: **the pipeline is solid and the
+alpha search has failed**, with one structural candidate still unspent. That is
+the expected outcome for retail-accessible major-pair FX, and it is now
+established rigorously rather than vaguely — which is the actual deliverable so
+far.
