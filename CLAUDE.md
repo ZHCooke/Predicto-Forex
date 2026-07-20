@@ -17,6 +17,172 @@ until the backtest/validation stage is solid and reviewed.
 _Last updated 2026-07-19 (session 13). 200 tests passing._
 _Repo: github.com/ZHCooke/Predicto-Forex_
 
+### 0.0b RESULT: 21.5 years settles it — the effect is REAL, and cost-bound
+
+EURUSD 2005-2026 complete: **143,701 mid bars, 0 errors, 21.5 years.**
+
+**The London-open effect over the full history (gross pips, EURUSD):**
+
+| era | n | pips | t | p |
+|---|---|---|---|---|
+| **2005-2014 (FRESH, never looked at)** | 2975 | **1.402** | **2.984** | **0.0029** |
+| 2015-2022 (research — where we selected) | 2076 | 2.876 | 5.912 | <1e-6 |
+| 2023-2026 (holdout) | 907 | 1.025 | 1.707 | 0.088 |
+| **FULL 21.5 YEARS** | **5958** | **1.858** | **6.119** | **1e-9** |
+
+**20 of 22 years positive.** Decay trend +0.024 pips/yr, p = 0.63 — no decay.
+
+**Three conclusions, now firmly established:**
+
+1. **The effect is real.** p = 1e-9 over 21.5 years, and independently
+   confirmed at p = 0.0029 on 2005-2014 data that played no part in finding it.
+   This is the first genuinely replicated result in the project.
+2. **Its true size is ~1.3 pips, not 2.9.** Excluding the selection window
+   entirely gives **1.314 pips** across 3,882 out-of-sample trades. The research
+   period overstated by **2.2x** — a textbook demonstration of selection bias,
+   and note the h002 holdout figure (1.025) was far closer to truth than the
+   research figure that generated the prediction.
+3. **It is not being arbitraged away.** No decay across 21 years, spanning the
+   GFC, the rise of algo trading, and a 5x spread compression (EURUSD median
+   went 1.00 pip in 2005 to 0.30 by 2014). The effect held its size while costs
+   collapsed around it.
+
+**IT IS A COST PROBLEM, NOT A SIGNAL PROBLEM. Breakeven cost is 1.31 pips:**
+
+| cost scenario | round trip | net pips | Sharpe |
+|---|---|---|---|
+| retail now (our measured) | 0.80 | 0.514 | **0.337** |
+| tight retail / ECN | 0.50 | 0.814 | **0.534** |
+| institutional | 0.30 | 1.014 | 0.666 |
+| prime + rebate | 0.15 | 1.164 | 0.764 |
+
+At our measured 0.80 pip round trip it earns Sharpe 0.337 — real, but below the
+s8 bar of 0.5. **At 0.50 pips it clears the bar.** That is the whole question
+now, and it is a question about execution, not about models.
+
+Note this also explains why the effect never disappeared: at 2005-2012 spreads
+of 1.0-1.5 pips it was never profitable to arbitrage away, and by the time
+spreads compressed it sat just under the retail cost line.
+
+### 0.0c The cost assumption interrogated — it reduces to ONE unmeasured number
+
+Full basket now complete: **all 7 pairs, 2005-2026, ~144k mid bars each, zero
+validation errors** (NZDUSD starts 2007).
+
+**The effect is a USD phenomenon, and it is coherent.** USD strengthens in the
+London morning on **7 of 7 pairs**, significant on 3:
+
+| pair | 21y gross | t | p | modern spread | round trip | net |
+|---|---|---|---|---|---|---|
+| **EURUSD** | **1.858** | **6.12** | <1e-6 | 0.30 | 0.50 | **+1.358** |
+| USDJPY | 1.124 | 3.46 | 0.0006 | 0.40 | 0.60 | +0.524 |
+| USDCHF | 1.143 | 2.67 | 0.008 | 1.00 | 1.20 | -0.057 |
+| NZDUSD | 0.433 | 1.17 | 0.24 | 1.10 | 1.30 | -0.867 |
+| GBPUSD | 0.427 | 1.16 | 0.24 | 0.80 | 1.00 | -0.573 |
+| USDCAD | 0.105 | 0.36 | 0.72 | 1.10 | 1.30 | -1.195 |
+| AUDUSD | 0.054 | 0.15 | 0.88 | 1.00 | 1.20 | -1.146 |
+
+Strong in the European/funding currencies (EUR, JPY, CHF), absent in the
+commodity dollars — economically coherent for a London-morning flow story.
+(Caveat: the pairs share the USD leg, so 7/7 is not 7 independent confirmations.)
+
+**A multi-pair book does NOT help. EURUSD alone is the best portfolio:**
+
+| book | net pips | Sharpe | CI |
+|---|---|---|---|
+| **EURUSD alone** | 1.358 | **0.916** | [0.569, 1.283] |
+| EURUSD + USDJPY | 0.983 | 0.808 | [0.430, 1.211] |
+| all 7 equal-weight | -0.280 | -0.243 | [-0.603, 0.134] |
+
+Diversification cannot rescue pairs whose spread exceeds their edge. Adding
+USDJPY halves the edge while correlation (0.21) is too high to halve the risk.
+
+**READ THE HEADLINE NUMBER CAREFULLY.** The 0.916 above spans all 21 years
+INCLUDING the 2015-2022 window we selected on. The honest, selection-free
+figure — 2005-2014 plus 2023-2026 only — is:
+
+| round trip | net pips | Sharpe | 95% CI |
+|---|---|---|---|
+| 1.10 (spread + 0.40/leg slip) | 0.214 | 0.140 | [-0.271, 0.566] |
+| 0.80 (our original assumption) | 0.514 | 0.337 | [-0.081, 0.765] |
+| **0.50 (spread + 0.10/leg slip)** | **0.814** | **0.534** | **[0.113, 0.961]** |
+| 0.30 (limit orders, spread only) | 1.014 | 0.666 | [0.241, 1.094] |
+
+**Use 0.534, not 0.916.**
+
+**THE WHOLE PROJECT NOW REDUCES TO ONE UNMEASURED NUMBER: SLIPPAGE.**
+
+- The **spread is measured**, at the exact hours traded: 0.30 pips at both the
+  08:00 entry and the 12:00 exit, stable since 2014.
+- The **edge is measured**, selection-free, over 21 years: 1.314 pips.
+- **Slippage is assumed and has never been validated.** It is the only input
+  standing between Sharpe 0.34 and Sharpe 0.53, and it CANNOT be measured from
+  bar data — it requires live execution records.
+
+**One structural argument in its favour:** this is a CALENDAR rule with no
+information urgency. At 07:59 London you already know you will trade at 08:00,
+so the order can be worked passively rather than crossing the spread — unlike a
+signal that must be executed the moment it fires. Passive execution in the most
+liquid hour of the day plausibly means slippage near zero, or negative. But
+"plausibly" is doing real work in that sentence, and it is exactly the kind of
+assumption this project has repeatedly found to be wrong.
+
+**NEXT STEP IS PAPER TRADING, INSTRUMENTED TO MEASURE SLIPPAGE.** Not to test
+whether the effect exists — 21 years and p = 1e-9 have settled that — but to
+measure the one input that decides whether it is worth trading. That is a
+narrow, answerable question, and it is the only one left.
+
+### 0.0 Extend history to 2005 (session 15)
+
+**A 2005-2014 mid-price pull is RUNNING.** Seven majors, 1h, ~10 extra years.
+Idempotent, so if it dies just re-run the same command and it resumes:
+
+```bash
+for s in EURUSD GBPUSD USDJPY AUDUSD USDCHF USDCAD NZDUSD; do
+  python -c "
+from datetime import date
+from src.logging_setup import setup_logging
+from src.ingest.fetch_dukascopy import pull_symbol, OFFER_SIDE_MID
+setup_logging()
+pull_symbol('$s','1h',date(2005,1,1),date(2014,12,31),offer_side=OFFER_SIDE_MID)
+"
+done
+
+# verify (expect 22 partitions/pair once 2005-2026 is complete)
+for d in data/raw/*/1h_mid; do echo "$d: $(ls $d/*.parquet | wc -l)"; done
+```
+
+Availability probed before starting: 2005 onward returns data, 2003 returns
+nothing. Some pairs may start later than 2005 — the fetcher logs "returned no
+rows, not writing" and moves on, so short histories are handled.
+
+**WHY — this is the one thing that changes the arithmetic.** Proving a Sharpe of
+0.5 is real needs ~17.3 years (s0.5 trap 3). We have 11.5, which is why every
+confidence interval in this project has straddled zero. 2005-2026 gives ~21
+years, crossing that threshold for the first time.
+
+**WHAT IT IS FOR — and what it is NOT for.** It cannot make an edge bigger. The
+h002 holdout gave 1.025 pips gross against 0.80 pips cost, and no quantity of
+data changes that. The questions worth asking of the extra decade are:
+
+1. **Is the London-open effect stable across 21 years and two market
+   structures?** Surviving the GFC, the rise of algo trading, and the spread
+   compression of the 2010s would be real knowledge.
+2. **How much has it decayed?** EURUSD retail spreads were 2-3 pips in 2005 vs
+   0.30 now. If the gross effect was much larger then and has shrunk toward the
+   cost floor, that measures the crowding story directly — and says whether to
+   expect further shrinkage.
+
+Note the corollary: at 2005-era spreads the strategy would NOT have been
+tradeable, so treat old data as evidence about SIGNAL EXISTENCE and STABILITY,
+never about tradeability.
+
+**Also planned with it: nested walk-forward.** The h002 selection picked the
+hour by looking at aggregate stats over the whole research period, then tested
+once. Nested selection — choosing inside each training window and testing on the
+next — is stricter and yields ~10-15 honest out-of-sample tests instead of one.
+That is the correct way to keep iterating now the holdout is spent.
+
 ### 0.1 Next action
 
 **The mid-price pull is COMPLETE** — all 7 pairs, 12/12 partitions,
