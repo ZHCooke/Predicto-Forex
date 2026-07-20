@@ -26,10 +26,48 @@ Measured median spreads (from the new `spread` column, strictly better than the
 old hourly-median profile): EURUSD 0.30, USDJPY 0.40, GBPUSD 0.90, AUDUSD 1.00,
 USDCHF 1.00, NZDUSD 1.10, USDCAD 1.20 pips.
 
-**Next action: re-verify the s0.3 candidate on `1h_mid` data**, then
-pre-register and take the single holdout look. The candidate was established on
-bid data; it showed t = 1.976 (bid) vs 1.964 (mid) on a 2019-2022 subsample, so
-it is expected to hold, but the full-sample mid confirmation has not been run.
+**Mid-price verification: DONE (session 14). The candidate holds.**
+
+| data | scope | t | p | gross pips |
+|---|---|---|---|---|
+| bid | all 7 | 3.282 | 0.00105 | 1.282 |
+| MID | all 7 | 3.280 | 0.00106 | 1.284 |
+| bid | EURUSD | 5.872 | <1e-6 | 2.856 |
+| **MID** | **EURUSD** | **5.912** | **<1e-6** | **2.876** |
+
+Bid and mid are indistinguishable, which is the signature of a real flow effect
+(contrast the rollover artifact: t = 7.96 bid vs 1.57 mid). All four planned
+attacks are now complete.
+
+**Robustness diagnostics: DONE (session 14). All five support the candidate.**
+
+These are DIAGNOSTICS, not searches — they ask whether the existing candidate is
+coherent, not which variant scores best — so they do not add to the selection
+burden the way another sweep would.
+
+1. **No decay.** 8/8 years positive: 3.85, 3.46, 3.06, 2.75, 2.26, 0.73, 2.12,
+   4.79 pips. First half 3.28 vs second half 2.47, difference p = 0.41; linear
+   trend -0.09 pips/yr, p = 0.67. No detectable weakening — though the power to
+   detect modest decay is low, and 2020 is nearly flat (0.73).
+2. **Coherent session shape, not a lone spike.** By London hour:
+   4h: -0.00, 5h: 0.76, 6h: 0.77, 7h: 1.01, **8h: 2.88**, 9h: 1.34, 10h: 1.08,
+   11h: 0.74, 12h: -0.83. It rises into the open, peaks, decays, then reverses.
+   A statistical fluke would have random neighbours.
+3. **Coherent holding profile.** 1h 0.74, 2h 0.83, 3h 1.70, **4h 2.88**, 5h 2.05,
+   6h 1.92, 12h 1.23. Accumulates through the London morning then gives back —
+   consistent with a flow story, and not a knife-edge (3h and 5h both work).
+4. **NOT driven by outliers — the strongest result.** Trimming the tails makes
+   it STRONGER: t = 5.91 untrimmed, 6.52 at 1%, 7.63 at 5%, **8.86 at 10%**.
+   Median +2.41 pips, 55.7% of days positive. A spurious effect collapses under
+   trimming; this one improves, because trimming removes noise rather than
+   signal.
+5. **Present every weekday.** Mon 1.12, Tue 3.38, Wed 4.05, Thu 2.36, Fri 3.49
+   pips — all positive, Monday weakest.
+
+**Next action: pre-register and take the SINGLE holdout look.** This is
+irreversible and is the owner's decision — see s0.3 for the prediction to
+register (shrink for selection: the hour was chosen from a six-row table and
+EURUSD because it is the only pair whose spread the effect clears).
 
 To re-pull anything later, the fetcher is idempotent — `covers_range()` skips
 partitions that already cover their year and re-fetches ones that do not, so
@@ -65,7 +103,57 @@ the London open — a structural, flow-driven regularity. That is the signpost:
 signal in retail-accessible FX lives in how the market is ORGANISED (sessions,
 fixes, expiries), not in transforms of past prices.
 
-### 0.3 THE CANDIDATE (unspent, ready for holdout)
+### 0.3a HOLDOUT RESULT (h002, spent 2026-07-19) — REAL BUT TOO SMALL TO TRADE
+
+**The holdout is now SPENT.** One look taken, logged, access count = 1.
+
+| metric | research | predicted | **HOLDOUT** |
+|---|---|---|---|
+| gross pips/trade | 2.876 | ~2.0 | **1.025** |
+| t-statistic | 5.912 | ~3.8 | **1.707** |
+| p-value | <1e-6 | — | **0.088** |
+| days positive | 55.7% | — | **54.9%** |
+| median pips | 2.413 | — | **1.888** |
+| net Sharpe | 0.873 | 0.50 ± 0.40 | **0.197** |
+| net Sharpe CI | [0.196, 1.588] | — | **[-0.725, 1.204]** |
+| net pips/trade | ~2.08 | — | **0.225** |
+| annual return | 3.4% | — | **0.52%** |
+
+Years: 2023 +1.392, 2024 +0.720, 2025 +1.618, 2026 (partial) **-0.290** pips.
+
+**`evaluate_against_prereg` returned CONFIRMED. Do not take that at face value —
+the substantive answer is that the strategy FAILS.**
+
+What actually happened, honestly:
+
+- **The effect is probably real.** It replicated in direction and shape with
+  striking consistency: 54.9% of days positive against 55.7% in research, median
+  +1.89 pips against +2.41. That is not what noise looks like.
+- **But it is about HALF the research magnitude** (1.03 vs 2.88 pips), it is
+  **not statistically significant out of sample** (t = 1.71, p = 0.088), and
+  its CI straddles zero.
+- **After costs it is economically negligible.** 0.225 pips per trade x 249
+  trades = 0.52% per year unlevered, with a -4.1% drawdown. The 0.80 pip round
+  trip eats 78% of the gross edge.
+- **It fails s8 criterion 1** (net Sharpe 0.197 vs a 0.5 bar).
+
+**A SECOND FLAW IN THE PRE-REGISTRATION FRAMEWORK, now visible.** Session 5
+fixed it rubber-stamping degenerate results. It still rubber-stamps results that
+land inside a WIDE TOLERANCE while failing the success criteria: 0.197 is inside
+0.50 ± 0.40, so the verdict says CONFIRMED even though the strategy is not worth
+trading. `evaluate_against_prereg` should also check the s8 bar, and tolerance
+should be tight enough that "confirmed" implies "worth acting on".
+
+**And the calibration lesson: my shrunk prediction was still too optimistic.**
+I shrank 0.873 -> 0.50 for selection; the truth was 0.197. Selection bias plus
+regression to the mean cost more than a 40% haircut — closer to 75%. Any future
+pre-registration should shrink harder than feels reasonable.
+
+**Verdict: the London-open effect is real, small, and not tradeable at retail
+cost.** It is the correct answer to the question we asked, and it is a negative
+one for trading purposes.
+
+### 0.3 THE CANDIDATE (SPENT — see 0.3a for the holdout outcome)
 
 **Short EURUSD at 08:00 London local time, hold 4 hours.**
 
@@ -1495,3 +1583,56 @@ alpha search has failed**, with one structural candidate still unspent. That is
 the expected outcome for retail-accessible major-pair FX, and it is now
 established rigorously rather than vaguely — which is the actual deliverable so
 far.
+
+---
+
+### 2026-07-19 (session 14) — Holdout spent on h002. Effect is real, and too small.
+
+Verified the candidate on mid data (t 5.872 -> 5.912, indistinguishable), ran
+five robustness diagnostics (all supportive — see s0.1), pre-registered h002 and
+committed it to git BEFORE looking, then took the single permitted holdout look.
+
+**Result: gross +1.025 pips (t = 1.707, p = 0.088), net Sharpe 0.197, annual
+return 0.52%.** See s0.3a for the full table.
+
+**The three things worth carrying forward:**
+
+1. **Replication in shape, not magnitude.** Days-positive was 54.9% vs 55.7% in
+   research and median pips 1.89 vs 2.41 — the effect is clearly there. But the
+   MEAN edge halved, which is what happens when a selected estimate meets fresh
+   data. Direction replicated; size did not.
+
+2. **Costs, one final time.** Gross 1.025 pips against a 0.80 pip round trip
+   leaves 0.225. The entire eight-session cost investigation is vindicated: at
+   retail spreads, an effect has to be several times larger than this to matter.
+   This is the same wall every strategy in this project has hit.
+
+3. **A framework flaw found by being on the receiving end of it.** The
+   pre-registration returned CONFIRMED for a strategy that fails the success
+   criteria, because 0.197 sits inside 0.50 ± 0.40. Session 5 taught us that
+   confirming a DEGENERATE result is worse than no framework; session 14 adds
+   that confirming an ECONOMICALLY IRRELEVANT one is the same failure wearing a
+   different hat. Fix: `evaluate_against_prereg` should require the s8 bar, and
+   tolerances should be tight enough that CONFIRMED implies actionable.
+
+**Where this leaves the project.**
+
+The holdout is spent. There is no clean out-of-sample data left for 2015-2026,
+and per s4.7 the only honest validation remaining is FORWARD paper trading on
+data that does not yet exist.
+
+The strategy search has now returned a complete answer rather than an ambiguous
+one: price-derived features are empty (s11), regime conditioning is refuted
+(s12), positioning is an overlap artifact (s13), and the one genuine structural
+effect is real but roughly 4x too small to clear retail costs (s14). That is not
+a failure to find the answer; it is the answer.
+
+**If continuing, the only directions with a real prior:**
+- **Lower costs**, not better signal. The effect clears at ~0.2 pip round trip
+  (institutional/ECN pricing with rebates), and is dead at 0.8. Everything we
+  have found is cost-constrained rather than signal-constrained.
+- **Forward paper trading** the London-open rule to gather genuinely clean data,
+  accepting it is currently ~0.5%/yr.
+- **A different instrument class** where retail costs are proportionally lower
+  relative to volatility.
+- Otherwise: treat the pipeline as the deliverable and stop.
