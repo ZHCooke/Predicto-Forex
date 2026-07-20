@@ -127,10 +127,75 @@ liquid hour of the day plausibly means slippage near zero, or negative. But
 "plausibly" is doing real work in that sentence, and it is exactly the kind of
 assumption this project has repeatedly found to be wrong.
 
-**NEXT STEP IS PAPER TRADING, INSTRUMENTED TO MEASURE SLIPPAGE.** Not to test
-whether the effect exists — 21 years and p = 1e-9 have settled that — but to
-measure the one input that decides whether it is worth trading. That is a
-narrow, answerable question, and it is the only one left.
+### 0.0d Tick-level execution study — the cost assumption was 2.3x too harsh
+
+`src/analysis/execution.py`. Reconstructs the actual fill from real bid/ask
+ticks at the decision instant, on a random sample of 30 days from 2024-2025
+(~80k ticks/day).
+
+**A BAR-LABELLING BUG FOUND HERE, AND IT MATTERS FOR THE TRADE SPEC.**
+Dukascopy bars are **START-labelled**: a bar stamped 08:00 opens at 08:00 and
+closes at 09:00. Verified against ticks to 0.1 pip on all three of 07/08/09.
+
+Our analysis uses the CLOSE of the London-hour-8 bar, so the actual trade is
+**enter 09:00 London, exit 13:00 London** — not 08:00-12:00 as the prose in
+earlier sessions loosely said. The h002 pre-registration is unaffected because
+it was written precisely ("that bar close"), and every statistical result is
+unaffected because the bar analysis was internally consistent throughout. But
+the first tick study ran an hour early on both legs and produced -5.6 pips,
+which is what caught it. **Any live implementation must use 09:00 London.**
+
+**MEASURED EXECUTION CONDITIONS** (corrected timing, 09:00 London entry):
+
+| | median | p90 |
+|---|---|---|
+| spread at entry instant | **0.30 pips** | 0.61 |
+| spread at exit instant | **0.30 pips** | 0.50 |
+| ticks in a +/-60s window | 251 | — |
+
+**Round-trip cost crossing the spread: 0.345 pips** — not the 0.80 we assumed
+for eight sessions. The assumption was 2.3x too harsh.
+
+The 30-day P&L (mean -4.5, median +1.8 to +2.3 pips) is NOT a test of the edge:
+at 25-pip daily vol, 30 observations give t = -0.94, i.e. noise. The median
+being +1.8/+2.3 is consistent with the historical median (2.41 research, 1.89
+holdout), which is mildly reassuring, and that is all it is. The study's
+purpose was to measure the SPREAD, which it did.
+
+### 0.0e WHERE THIS LANDS — viable, with one narrow unknown left
+
+Selection-free (2005-2014 + 2023-2026, n = 3,882), using tick-measured costs:
+
+| scenario | round trip | net pips | Sharpe | 95% CI |
+|---|---|---|---|---|
+| old assumption (unvalidated) | 0.800 | 0.514 | 0.337 | [-0.081, 0.765] |
+| **tick-measured, crossing spread** | **0.345** | **0.969** | **0.636** | **[0.212, 1.064]** |
+| + 0.10/leg broker slippage | 0.545 | 0.769 | 0.505 | [0.084, 0.932] |
+| + 0.20/leg broker slippage | 0.745 | 0.569 | 0.374 | [-0.044, 0.803] |
+| passive fills (earns spread) | -0.345 | 1.659 | 1.089 | [0.663, 1.523] |
+
+**At the measured cost this clears the s8 bar with a CI excluding zero, on
+out-of-sample data that played no part in selection.** That is the first time
+anything in this project has done so.
+
+**THE BROKER SLIPPAGE BUDGET IS ~0.18 PIPS PER LEG.** Under that, the strategy
+holds Sharpe > 0.5. Over it, it does not. That is now the entire question.
+
+**What is still unknown, stated plainly:**
+- 0.345 pips is the RAW MARKET cost on Dukascopy's ECN feed. A retail broker
+  marks this up, and the markup varies enormously between "raw spread +
+  commission" and "all-in" pricing. Broker choice may matter more than
+  everything in this repo.
+- Latency, requotes and rejection are unmeasured and unmeasurable from
+  historical data.
+- The effect is real and undecayed over 21 years, but it is a KNOWN published
+  effect; forward crowding remains a risk history cannot price.
+
+**NEXT STEP: live micro-lot execution (0.01 lots, ~$0.10/pip) to measure broker
+slippage against the 0.18 pip/leg budget.** A demo account cannot answer this —
+demo servers fill at the quoted price, flattering precisely the number we need.
+A year of daily trades at micro size risks perhaps $20-30 total, which is the
+cost of an experiment rather than a trading decision.
 
 ### 0.0 Extend history to 2005 (session 15)
 
