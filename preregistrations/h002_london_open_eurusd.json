@@ -1,0 +1,12 @@
+{
+  "hypothesis_id": "h002_london_open_eurusd",
+  "description": "Short EURUSD at the bar timestamped 08:00 Europe/London (DST-aware, so 07:00 UTC in summer and 08:00 UTC in winter). Enter at that bar close, exit 4 bars (4h) later. One trade per trading day. MID prices (data/raw/EURUSD/1h_mid). Costs: measured round trip of 0.80 pips (0.40 spread + 0.40 slippage). No fitted parameters - a pure calendar rule.",
+  "symbol": "EURUSD",
+  "timeframe": "1h",
+  "model": "london_open_short",
+  "horizon": 4,
+  "predicted_net_sharpe": 0.5,
+  "tolerance": 0.4,
+  "rationale": "RESEARCH (2015-01-01..2022-12-31, mid prices, strictly non-overlapping, n=2076): gross +2.876 pips/trade, t=5.912, p<1e-6. Round-trip cost 0.80 pips => net ~2.08 pips. Earlier 4h-grid backtest gave net Sharpe 0.873, CI [0.196,1.588]. PREDICTION IS DELIBERATELY SHRUNK to 0.50 Sharpe / ~2.0 pips gross because the hour was selected from a six-row table and EURUSD chosen as the only pair whose spread the effect clears (~42 implicit choices atop an 82-feature screen). SURVIVED: mid-vs-bid (5.912 vs 5.872), overlap correction (3.68->3.28 pooled), Bonferroni over ~180 configs, 8/8 years positive, no decay (trend p=0.67), coherent session shape (neighbouring hours 0.76/1.01/2.88/1.34/1.08), coherent holding profile (peaks at 4h), outlier-robust (t RISES to 8.86 at 10%% trim), present all five weekdays. EXPECTED HOLDOUT STATS IF REAL: n~875 trades, SE ~1.5x research, so t~3.8 at full strength or t~1.9 if halved. CAVEATS: (a) ~33 configs saw 2023-2026 before the seal existed, so this holdout is partially burnt; (b) this is a documented published effect, so crowding is a forward risk that history cannot measure.",
+  "created_utc": "2026-07-20T09:50:49.367691+00:00"
+}
