@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Predicto-Forex — What This Project Is</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm 18mm 18mm;
+          @bottom-center { content: counter(page); } }
+
+  html { font-size: 10.5pt; }
+  body { font-family: Georgia, "Times New Roman", serif; line-height: 1.55;
+         color: #1a1a1a; margin: 0; }
+
+  h1 { font-size: 25pt; line-height: 1.15; margin: 0 0 6px 0; letter-spacing: -0.4px; }
+  h2 { font-size: 15pt; margin: 26px 0 8px 0; padding-bottom: 5px;
+       border-bottom: 2px solid #1a3a5c; color: #1a3a5c; page-break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 18px 0 5px 0; color: #24476b; page-break-after: avoid; }
+  p { margin: 0 0 9px 0; }
+  ul, ol { margin: 0 0 10px 0; padding-left: 20px; }
+  li { margin-bottom: 4px; }
+
+  .subtitle { font-size: 12pt; color: #555; font-style: italic; margin-bottom: 4px; }
+  .meta { font-size: 8.5pt; color: #777; margin-bottom: 22px;
+          border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+
+  .lead { font-size: 11.5pt; background: #f4f7fa; border-left: 4px solid #1a3a5c;
+          padding: 12px 15px; margin: 0 0 18px 0; }
+
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 14px 0;
+          font-family: "Segoe UI", Helvetica, Arial, sans-serif; font-size: 9pt;
+          page-break-inside: avoid; }
+  th { background: #1a3a5c; color: #fff; text-align: left; padding: 6px 8px; font-weight: 600; }
+  td { padding: 5px 8px; border-bottom: 1px solid #dde3ea; }
+  tr:nth-child(even) td { background: #f7f9fb; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .term { background: #fdfaf3; border: 1px solid #e8dcc0; border-radius: 3px;
+          padding: 9px 13px; margin: 9px 0; page-break-inside: avoid; }
+  .term b { color: #7a5c1e; }
+
+  .callout { background: #f0f6f0; border-left: 4px solid #4a7c4a;
+             padding: 10px 14px; margin: 12px 0; page-break-inside: avoid; }
+  .warn { background: #fdf3f3; border-left: 4px solid #a94442;
+          padding: 10px 14px; margin: 12px 0; page-break-inside: avoid; }
+
+  code { font-family: Consolas, monospace; font-size: 9pt; background: #f2f2f2;
+         padding: 1px 4px; border-radius: 2px; }
+
+  .pagebreak { page-break-before: always; }
+  .small { font-size: 9pt; color: #555; }
+  .tag { display: inline-block; background: #1a3a5c; color: #fff; font-size: 7.5pt;
+         padding: 1px 7px; border-radius: 9px; vertical-align: middle;
+         font-family: "Segoe UI", sans-serif; letter-spacing: 0.3px; }
+  .tagred { background: #a94442; }
+  .taggreen { background: #4a7c4a; }
+  .footer-note { margin-top: 26px; padding-top: 10px; border-top: 1px solid #ccc;
+                 font-size: 8.5pt; color: #666; }
+</style>
+</head>
+<body>
+
+<h1>Predicto&#8209;Forex</h1>
+<div class="subtitle">Can a person at home find a way to profit from currency markets?</div>
+<div class="meta">A plain-English explanation of what this project does, what it found, and what it
+cost to find out &middot; Fifteen research sessions &middot; July 2026</div>
+
+<div class="lead">
+<b>The one-paragraph version.</b> We built software to test whether patterns in currency
+prices can be turned into profit. We tested a lot of ideas. Almost all of them failed &mdash;
+and we made very sure they had really failed, rather than us being bad at looking. One idea
+survived: currencies move in a small, consistent way each morning when London's banks open.
+Over twenty-one years of data that pattern is unmistakably real. Whether it makes money comes
+down to a single number we cannot measure from historical data, and measuring it is the next step.
+</div>
+
+<h2>1. What is forex, and what are we trying to do?</h2>
+
+<p><b>Forex</b> (foreign exchange) is the market where currencies are traded. If you have ever
+changed money for a holiday, you have used it. Professionally, it is the largest financial
+market on earth &mdash; several trillion dollars change hands daily.</p>
+
+<p>Prices move constantly. The euro might be worth $1.08 this morning and $1.084 this afternoon.
+Our question is simple to state and hard to answer:</p>
+
+<div class="callout">
+<b>Can we predict, better than a coin flip and by enough to cover our costs, whether a currency
+will rise or fall?</b>
+</div>
+
+<p>Note the two conditions. Beating a coin flip is not enough on its own. You must beat it by
+enough to pay for the privilege of trading &mdash; and that turns out to be the hard part.</p>
+
+<div class="term">
+<b>Currency pair.</b> Currencies are always priced against each other, never alone.
+<code>EURUSD</code> means "how many US dollars does one euro cost?" The first currency is the
+<i>base</i>, the second the <i>quote</i>. We study the seven most-traded pairs, all involving
+the US dollar.
+</div>
+
+<div class="term">
+<b>Pip.</b> The standard small unit of price movement &mdash; 0.0001 of the price for most pairs.
+If EURUSD goes from 1.0800 to 1.0805, it moved 5 pips. A typical day sees EURUSD move about
+39 pips. Everything in this document is measured in pips.
+</div>
+
+<div class="term">
+<b>Going long and going short.</b> Buying something expecting it to rise is going <i>long</i>.
+Selling something you do not own, expecting to buy it back cheaper, is going <i>short</i>.
+Both are ordinary in currency markets, because buying one currency is automatically selling
+the other. Our strategy goes short.
+</div>
+
+<h2>2. The obstacle that shaped everything: the toll booth</h2>
+
+<p>Every time you trade you pay a small fee. It is not usually charged as a fee &mdash; it is
+built into the price. You buy at a slightly higher price than you can sell at, and the gap
+between those two prices is the <b>spread</b>.</p>
+
+<div class="term">
+<b>Spread.</b> The difference between the price to buy and the price to sell at the same instant.
+For EURUSD it is about 0.3 pips. You pay it on the way in and on the way out, so a complete
+trade (a <i>round trip</i>) costs roughly 0.3&ndash;0.8 pips depending on how well you execute.
+</div>
+
+<p>That sounds tiny. It is tiny &mdash; about 1% of a typical day's movement. But you pay it on
+<i>every single trade</i>, and this arithmetic sank our first serious attempt:</p>
+
+<table>
+<tr><th>What our first model did</th><th class="num">Result</th></tr>
+<tr><td>Predicted the next 15 minutes, traded constantly</td><td class="num">&mdash;</td></tr>
+<tr><td>Profit before costs, per year</td><td class="num">+24.4%</td></tr>
+<tr><td>Cost of all that trading, per year</td><td class="num">&minus;90.7%</td></tr>
+<tr><td><b>Actual outcome</b></td><td class="num"><b>Large loss</b></td></tr>
+</table>
+
+<p>The predictions were not worthless. They were just far too small to pay their own toll: the
+model predicted moves of about 0.17 pips while each trade cost about 1 pip. It was correct often
+enough to be interesting and nowhere near correct enough to be profitable.</p>
+
+<div class="callout">
+<b>This is the single most important lesson of the project.</b> Every strategy we tested failed
+in the same way. The bottleneck was never "can we predict?" &mdash; it was always "can we predict
+by <i>enough</i>?" Trading costs are not a detail to add at the end. They decide the answer.
+</div>
+
+<h2 class="pagebreak">3. How do you know if you have found something real?</h2>
+
+<p>This is the part that consumed most of our effort, and it is worth explaining, because it is
+where nearly everyone who tries this goes wrong.</p>
+
+<p>Financial data is extremely noisy. If you test enough ideas against it, some will look
+brilliant purely by chance. The danger is not failing to find a pattern &mdash; it is
+<b>finding one that isn't there and believing it.</b></p>
+
+<h3>The coin-flip problem</h3>
+
+<p>Flip a coin ten times and get six heads. Is the coin biased? Your best guess is 60% heads.
+But the honest range of possibilities runs from about 26% to 88% &mdash; which includes 50%.
+You cannot tell this coin from a fair one. You need far more flips.</p>
+
+<div class="term">
+<b>Confidence interval.</b> The honest range around a measurement, rather than a single number.
+When we say "the range includes zero", we mean: <i>this might be real skill, or it might be luck,
+and this data cannot distinguish them.</i> Almost every result in this project looked like that
+until the very end.
+</div>
+
+<div class="term">
+<b>Sharpe ratio.</b> The standard measure of investment quality: profit relative to how wildly
+that profit swings. Roughly: 0 = you made nothing; 0.4 = about what a stock-market index fund
+gives you; 1.0 = genuinely good; 2.0+ = professional hedge fund. We agreed in advance that
+0.5 was our minimum bar for taking anything seriously.
+</div>
+
+<h3>Four traps we actually fell into</h3>
+
+<p>These are not hypothetical textbook warnings. Each one produced a convincing, wrong result in
+this project before we caught it.</p>
+
+<table>
+<tr><th style="width:27%">The trap</th><th>What happened to us</th></tr>
+<tr><td><b>Seeing the future</b></td>
+    <td>Software that accidentally uses tomorrow's information to predict tomorrow looks
+    spectacular and is worthless. We wrote tests that corrupt future data and confirm nothing
+    in the past changes &mdash; then deliberately broke our own code to check the tests actually
+    catch it.</td></tr>
+<tr><td><b>Counting the same evidence repeatedly</b></td>
+    <td>One measure of trader positioning looked like our best-ever result. But we had counted
+    2,382 heavily overlapping observations as if independent, when there were really about 120.
+    Corrected, the result vanished completely.</td></tr>
+<tr><td><b>Using half the price</b></td>
+    <td>We initially used only the "sell" price rather than the midpoint. At quiet hours this
+    manufactured a pattern that looked overwhelmingly strong and was pure measurement artifact.</td></tr>
+<tr><td><b>Testing until something works</b></td>
+    <td>Test 50 ideas and 2&ndash;3 will look great by chance alone. We tracked every idea tested
+    (~180 in total) and raised the bar for significance accordingly.</td></tr>
+</table>
+
+<div class="warn">
+<b>The general principle:</b> every one of those errors made results look <i>better</i> than
+reality. Mistakes in this field are not random &mdash; they flatter you. That asymmetry is why
+so much of this project is defensive machinery rather than clever prediction.
+</div>
+
+<h3>The sealed envelope</h3>
+
+<p>The strongest protection is simple. We locked away several years of data and refused to look
+at it while experimenting. When we finally had a candidate worth testing, we wrote down our
+prediction in advance, committed it permanently, and then looked <b>once</b>.</p>
+
+<p>Why once? Because if you peek, adjust, and re-test, you eventually find something that passes
+by luck. The software enforces this: it refuses to open the sealed data without a written
+prediction on file, and it logs every access permanently.</p>
+
+<h2 class="pagebreak">4. What we tried, and what happened</h2>
+
+<p>Over fifteen sessions we tested essentially every standard approach. Here is the honest
+scorecard.</p>
+
+<table>
+<tr><th>Approach</th><th style="width:44%">What it means</th><th style="width:20%">Result</th></tr>
+<tr><td><b>Momentum &amp; trend</b></td><td>Assume recent movement continues</td><td>No signal</td></tr>
+<tr><td><b>Mean reversion</b></td><td>Assume unusual moves snap back</td><td>No signal</td></tr>
+<tr><td><b>Technical indicators</b></td><td>RSI, ATR and similar standard tools</td><td>No signal</td></tr>
+<tr><td><b>Interest rates</b></td><td>Money flows toward higher-paying currencies</td><td>No signal</td></tr>
+<tr><td><b>Currency strength</b></td><td>Watch seven pairs to separate "euro rose" from "dollar fell"</td><td>No signal</td></tr>
+<tr><td><b>Trader positioning</b></td><td>Official data on what speculators are betting</td><td>Artifact &mdash; vanished when corrected</td></tr>
+<tr><td><b>Market conditions</b></td><td>Do signals work in calm markets but not turbulent ones?</td><td>Refuted &mdash; 0 of 7 tests</td></tr>
+<tr><td><b>Machine learning</b></td><td>Calibration, model ensembles</td><td>Made results <i>worse</i></td></tr>
+<tr><td><b>Time-of-day patterns</b></td><td>Do currencies behave differently at certain hours?</td><td><span class="tag taggreen">SURVIVED</span></td></tr>
+</table>
+
+<p>The clearest single result: we screened 82 different predictive features. <b>One</b> passed
+even a basic significance check &mdash; where pure chance would produce about four. We found
+<i>fewer</i> apparent patterns than randomness alone generates. That is strong evidence the
+patterns genuinely are not there.</p>
+
+<div class="callout">
+<b>An unexpected finding about complexity.</b> We imported sophisticated techniques from a
+sibling sports-prediction project. They made results consistently worse. The constraint was never
+model sophistication &mdash; it was that there was nothing in the data to find. More complexity
+applied to no signal produces confident nonsense.
+</div>
+
+<h2>5. The one thing that survived</h2>
+
+<p>The survivor is not a price pattern at all. It is a <b>structural</b> fact about how the
+market is organised.</p>
+
+<div class="callout">
+<b>The finding:</b> the US dollar tends to strengthen slightly during the London morning, when
+Europe's banks open and a large volume of business flows through the market at a predictable
+time each day. The trade: sell the euro against the dollar at 9am London time, buy it back four
+hours later. There is nothing to predict &mdash; you simply act at the same time every day.
+</div>
+
+<p>This matters because it is a <i>reason</i>, not just a pattern. It exists because of how the
+trading day is structured, which is why it does not evaporate the way statistical flukes do.</p>
+
+<h3>Twenty-one years of evidence</h3>
+
+<p>We extended our data back to 2005 specifically to test it. The crucial row is the first: that
+decade played no part in discovering the effect, so it is genuinely independent evidence.</p>
+
+<table>
+<tr><th>Period</th><th class="num">Trades</th><th class="num">Gain per trade</th><th class="num">Chance of a fluke</th></tr>
+<tr><td><b>2005&ndash;2014</b> &mdash; never examined while searching</td><td class="num">2,975</td><td class="num">1.40 pips</td><td class="num">1 in 340</td></tr>
+<tr><td>2015&ndash;2022 &mdash; where we found it</td><td class="num">2,076</td><td class="num">2.88 pips</td><td class="num">&lt; 1 in a million</td></tr>
+<tr><td>2023&ndash;2026 &mdash; the sealed envelope</td><td class="num">907</td><td class="num">1.03 pips</td><td class="num">1 in 11</td></tr>
+<tr><td><b>All 21.5 years combined</b></td><td class="num"><b>5,958</b></td><td class="num"><b>1.86 pips</b></td><td class="num"><b>1 in a billion</b></td></tr>
+</table>
+
+<p><b>Twenty of the twenty-two years were profitable.</b> The effect survived the 2008 financial
+crisis, the rise of computerised trading, and a five-fold collapse in trading costs. It shows
+no sign of fading.</p>
+
+<div class="warn">
+<b>A lesson in honesty about numbers.</b> Notice the middle row is roughly double the others.
+That is the period we searched to <i>find</i> the effect &mdash; and searching inflates whatever
+you find. The truthful estimate, excluding that window entirely, is <b>1.31 pips</b>. The number
+you discover something at is almost always better than the truth, and the gap here was 2.2&times;.
+</div>
+
+<h2 class="pagebreak">6. Does it actually make money?</h2>
+
+<p>The gain is 1.31 pips per trade. The cost is whatever it costs to execute. So everything
+depends on a comparison of two small numbers.</p>
+
+<p>To measure costs properly, we reconstructed real trades from <b>tick data</b> &mdash; every
+individual price change, roughly 80,000 per day &mdash; to see exactly what price we would have
+got at the moment of trading.</p>
+
+<table>
+<tr><th>Cost per round trip</th><th class="num">Profit per trade</th><th class="num">Sharpe ratio</th><th>Verdict</th></tr>
+<tr><td>0.80 pips &mdash; our old assumption</td><td class="num">0.51 pips</td><td class="num">0.34</td><td>Below bar</td></tr>
+<tr><td><b>0.35 pips &mdash; actually measured</b></td><td class="num"><b>0.97 pips</b></td><td class="num"><b>0.64</b></td><td><span class="tag taggreen">CLEARS BAR</span></td></tr>
+<tr><td>0.55 pips &mdash; with modest broker costs</td><td class="num">0.77 pips</td><td class="num">0.51</td><td><span class="tag taggreen">CLEARS BAR</span></td></tr>
+<tr><td>0.75 pips &mdash; with higher broker costs</td><td class="num">0.57 pips</td><td class="num">0.37</td><td>Below bar</td></tr>
+</table>
+
+<p>We had been assuming costs <b>2.3&times; higher than reality</b>. Correcting that changes the
+conclusion: measured properly, the strategy clears our agreed quality bar, on data that played
+no part in finding it. That is the first time anything in this project has managed that.</p>
+
+<h2>7. What we still don't know</h2>
+
+<p>The remaining uncertainty is narrow, specific, and honestly stated.</p>
+
+<div class="term">
+<b>Slippage.</b> The gap between the price you see when you decide to trade and the price you
+actually get. Caused by delay, by your broker's markup, and by the market moving in the
+meantime. <b>It cannot be measured from historical data.</b> It requires actually placing orders.
+</div>
+
+<div class="warn">
+<b>The entire remaining question:</b> our budget for slippage is about <b>0.18 pips per trade
+leg</b>. Below that, the strategy is worth trading. Above it, it is not. Everything else has
+been measured; this one number has not.
+</div>
+
+<p>Three further honest caveats:</p>
+
+<ul>
+<li><b>Broker choice may now matter more than everything in this repository.</b> Our 0.35 pip
+figure comes from a high-quality data feed. A retail broker adds their own markup, and that
+markup varies enormously between providers.</li>
+<li><b>This is a known effect.</b> London-open patterns are documented publicly. Reassuring for
+validity &mdash; we are not imagining it &mdash; but it means we are rediscovering, not
+discovering, and known effects can attract enough traders to erode them.</li>
+<li><b>The returns are modest.</b> Roughly 1&ndash;3% per year unleveraged. Real, but not
+life-changing, and the effort required is substantial.</li>
+</ul>
+
+<h3>What happens next</h3>
+
+<p>The next step is to place real trades at the smallest size the market allows &mdash; about
+10 cents per pip &mdash; purely to measure slippage. A full year of daily trading at that size
+risks roughly $20&ndash;30 in total. That is the cost of an experiment, not an investment.</p>
+
+<p>Notably, a practice account <i>cannot</i> answer this: simulated accounts fill orders at the
+quoted price, which flatters precisely the number we need to measure.</p>
+
+<h2>8. What this project actually produced</h2>
+
+<p>Two things exist here, and it is worth being clear about which is which.</p>
+
+<p><b>A research pipeline that reliably tells the truth.</b> It downloads and validates data,
+prevents accidental cheating, models real trading costs, and applies statistical tests strong
+enough to destroy our own promising results &mdash; which it did, twice, to findings we were
+excited about. 200 automated tests protect it, and the two most critical safeguards have been
+verified by deliberately breaking the code to confirm the alarms sound.</p>
+
+<p><b>One small, real, structural trading effect</b>, established across 21 years and independently
+confirmed on data that played no role in finding it &mdash; whose profitability rests on a single
+unmeasured execution number.</p>
+
+<div class="callout">
+<b>The honest summary.</b> Most of what we tested does not work, and we now know that rigorously
+rather than vaguely &mdash; which is itself a real result, and the opposite of what most people
+in this field conclude. One thing does work, modestly. Whether it is worth trading is now a
+practical question about execution, not a research question about prediction.
+</div>
+
+<div class="footer-note">
+<b>A note on method.</b> Every number in this document is measured rather than assumed, and every
+result that changed our conclusions was verified by trying to break it first. Several findings we
+were initially excited about are recorded here as failures, because that is what they turned out
+to be. The full technical record, including every mistake and its correction, is in
+<code>CLAUDE.md</code> in this repository.
+</div>
+
+</body>
+</html>
