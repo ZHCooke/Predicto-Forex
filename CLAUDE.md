@@ -248,10 +248,17 @@ once. Nested selection — choosing inside each training window and testing on t
 next — is stricter and yields ~10-15 honest out-of-sample tests instead of one.
 That is the correct way to keep iterating now the holdout is spent.
 
-### 0.1 Next action
+### 0.1 Mid-price milestone (session 14 — SUPERSEDED as "next action" by s0.0b-e)
+
+> **THE CURRENT NEXT ACTION is in s0.0e:** instrumented live micro-lot execution
+> to measure broker slippage against the ~0.18 pip/leg budget. Everything below
+> in this subsection is the session-14 mid-price verification, kept as the
+> record of how the candidate was confirmed on 2015-2026 before the 2005
+> extension (s0.0b) settled it over 21 years.
 
 **The mid-price pull is COMPLETE** — all 7 pairs, 12/12 partitions,
-**501,772 bars**, 2015-01-01..2026-07-01, zero validation errors.
+**501,772 bars** (2015-2026 window; full history is 2005-2026, see s0.0b),
+zero validation errors.
 
 Measured median spreads (from the new `spread` column, strictly better than the
 old hourly-median profile): EURUSD 0.30, USDJPY 0.40, GBPUSD 0.90, AUDUSD 1.00,
@@ -321,7 +328,10 @@ for d in data/raw/*/1h_mid; do echo "$d: $(ls $d/*.parquet | wc -l)/12"; done
 
 ### 0.2 Where the project stands
 
-**No validated edge yet. One candidate is close and unspent.**
+**One validated structural edge; its tradeability rests on one unmeasured
+execution number.** (This supersedes the earlier "no validated edge" framing,
+which held through session 11 and was overturned by the 21-year replication in
+s0.0b.)
 
 Ten sessions of feature engineering produced essentially nothing: a screen of
 82 price/carry/strength features found **1 nominal hit at p < 0.05 where chance
@@ -330,9 +340,15 @@ ATR, carry, rates, currency strength and dispersion are all rigorously null,
 not merely unproven.
 
 The single survivor is **not a price pattern**. It is intraday seasonality at
-the London open — a structural, flow-driven regularity. That is the signpost:
-signal in retail-accessible FX lives in how the market is ORGANISED (sessions,
-fixes, expiries), not in transforms of past prices.
+the London open — a structural, flow-driven regularity, now confirmed at
+p = 1e-9 over 21.5 years and independently replicated on 2005-2014 data that
+played no part in finding it (s0.0b). That is the signpost: signal in
+retail-accessible FX lives in how the market is ORGANISED (sessions, fixes,
+expiries), not in transforms of past prices.
+
+At the tick-MEASURED cost of 0.345 pips it earns net Sharpe 0.636 out of sample
+with a CI excluding zero (s0.0e). The only open question is whether a live
+broker's slippage stays within budget — a question bar data cannot answer.
 
 ### 0.3a HOLDOUT RESULT (h002, spent 2026-07-19) — REAL BUT TOO SMALL TO TRADE
 
@@ -484,6 +500,11 @@ Sharpe is taken seriously (see s8, s10).
   constraint is sample size and signal strength, not model sophistication (s8).
 - Structural calendar features other than sessions — month-end, quarter-end,
   option expiry all flat (s12).
+- Cross-asset series (equities, gold, oil, copper, gas) as a directional LEAD
+  (s16, h003). Strong CONTEMPORANEOUS co-movement (gold/EUR corr 0.40 same
+  window) but ~0 as a lead; the FDR "survivors" collapse under trimming and have
+  sub-50% hit rates. One unconfirmed reversal (risk-on -> haven strengthens next
+  session) is left as a candidate for a fresh pre-registration, not a result.
 
 ---
 
@@ -560,7 +581,11 @@ Predicto-Forex/
 │   ├── sizing/kelly.py           # fractional Kelly, capped, drawdown throttle
 │   └── analysis/
 │       ├── feature_screen.py     # corrected screen across families/timeframes
-│       └── regime.py             # conditional + interaction tests
+│       ├── regime.py             # conditional + interaction tests
+│       └── execution.py          # tick-level fill reconstruction (real cost)
+├── docs/
+│   ├── project_explainer.html    # plain-English writeup (source of truth)
+│   └── Predicto-Forex-Explained.pdf  # 8pp, rendered via headless Chrome
 └── tests/                        # 200 tests
 ```
 
@@ -1794,6 +1819,8 @@ plus the numbered sections.
 | 11 | Full 82-feature screen | **The corpus is empty**: 1 nominal hit where chance gives 4.1. One survivor: London-open seasonality |
 | 12 | Structural + regime tests | Regime conditioning refuted (0/7). **Bid-only prices fabricate signal at rollover** |
 | 13 | Mid prices, COT, overlap trap | **COT's t = -3.75 was overlap artifact** (-0.74 corrected). London-open candidate survived |
+| 14 | Holdout spent on h002 | Effect REAL out of sample but half-size: 1.03 pips, net Sharpe 0.197. Too small at 0.80 cost. Framework rubber-stamped it CONFIRMED anyway (2nd flaw) |
+| 15 | History extended to 2005; tick execution study | 21.5y, p=1e-9, no decay, replicated on fresh 2005-2014 data. Cost measured at 0.345 pips (not 0.80) — clears 0.5 bar. Plain-English PDF written |
 
 ---
 
@@ -1867,3 +1894,111 @@ a failure to find the answer; it is the answer.
 - **A different instrument class** where retail costs are proportionally lower
   relative to volatility.
 - Otherwise: treat the pipeline as the deliverable and stop.
+
+### 2026-07-19 (session 15) — Extended to 2005, measured real execution cost, wrote the explainer
+
+Three pieces of work, and the conclusion from session 14 (h002 "too small to
+trade") is now REVERSED — not because the edge grew, but because the cost
+assumption was wrong. Full detail is in s0.0b-e at the top; summary here.
+
+**1. History extended to 2005.** Pulled 2005-2014 mid data for all seven majors
+(~144k bars each, 0 validation errors). 21.5 years total, which for the first
+time crosses the ~17.3 years needed to resolve a Sharpe of 0.5 (s0.5 trap 3).
+
+The London-open effect over the full history: **1.858 pips, t = 6.12,
+p = 1e-9**, 20/22 years positive, decay trend p = 0.63 (none). Crucially it
+REPLICATED on the 2005-2014 decade that played no part in finding it
+(1.402 pips, t = 2.98, p = 0.0029) — the first genuinely independent replication
+in the project. True selection-free size is 1.314 pips (research overstated by
+2.2x). It is a USD phenomenon: positive on 7/7 pairs, significant on 3 (EURUSD,
+USDJPY, USDCHF); EURUSD alone is the best book, since diversification cannot
+rescue pairs whose spread exceeds their edge.
+
+**2. Tick-level execution study** (`src/analysis/execution.py`). Reconstructed
+actual fills from real bid/ask ticks (~80k/day) on 30 sampled days.
+
+- **Bar-labelling bug found:** Dukascopy bars are START-labelled, so the trade
+  is enter 09:00 London / exit 13:00, not 08:00/12:00. No statistical result
+  changes; h002 pre-reg was written precisely enough to be unaffected; any LIVE
+  implementation must use 09:00. See s0.0d.
+- **Measured round-trip cost: 0.345 pips**, not the 0.80 assumed for eight
+  sessions — 2.3x too harsh. At 0.345, the selection-free strategy nets 0.969
+  pips, **Sharpe 0.636, CI [0.212, 1.064] — first out-of-sample result in the
+  project with a CI excluding zero.**
+
+**The whole project now reduces to ONE unmeasured number: broker slippage,
+budget ~0.18 pips/leg.** Spread is measured, edge is measured over 21 years,
+slippage is not and cannot be measured from bar data — it needs live micro-lot
+execution (a demo account fills at the quoted price and flatters exactly this
+number). See s0.0e.
+
+**3. Plain-English explainer** (`docs/`). `docs/project_explainer.html` (source)
+renders to `docs/Predicto-Forex-Explained.pdf` (8 pages, headless Chrome — see
+`docs/README.md`) for a reader with no forex background. Deliberately documents
+the failures and the two exciting-then-destroyed results, because the pattern of
+caught mistakes is the most transferable content.
+
+**Status: the answer flipped from session 14.** The effect is real, replicated,
+undecayed over 21 years, and at the MEASURED (not assumed) cost it clears the
+s8 bar out of sample. The remaining question is no longer "is there signal" —
+21 years and p = 1e-9 settled that — but whether a real broker's slippage stays
+under ~0.18 pips/leg. That is a live-execution question, and the next step is
+instrumented micro-lot trading, not more research.
+
+---
+
+### 2026-07-30 (session 16) — Cross-asset session-transmission battery (h003): NO tradeable lead
+
+Owner asked whether cross-asset datasets (equities, gold, oil, copper, gas, VIX,
+DXY) could add predictive power. Most of the requested list was already ruled out
+(rates s4, COT s13, vol/regime s12, ATR s11), so the only genuinely new,
+defensible idea was a **session-transmission LEAD**: does a cross-asset move
+during one region's session predict the NEXT open of a currency that was closed
+while it moved? (The rest is contemporaneous co-movement — untradeable.)
+
+**Built:** `src/features/cross_asset.py` (session-window returns + lookahead-proof
+UTC pairing), `src/analysis/session_lead.py` (the battery + BH-FDR),
+`tests/test_session_lead.py`. Pulled 1h mid CFDs from the SAME Dukascopy feed
+(SP500/NASDAQ/DOW 2012+, GOLD 2003+, WTI/BRENT/COPPER/NATGAS ~2011-12+). VIX
+(data only from 2022), DXY (2017, near-circular with the USD strength factor) and
+bond CFDs (2018) excluded on data-depth grounds. 205 tests passing.
+
+**Pre-registered 17 cells (15 tradeable + 2 contemporaneous controls) and
+committed to git BEFORE running** (`preregistrations/h003_*.json`, commit
+26523e4). Primary stat: OLS slope with intercept (absorbs the h002 London-open
+drift), one-sided in the pre-registered direction; cross-check `signed_return_test`.
+
+**RESULT: no tradeable lead. Four cells pass the OLS-slope FDR gate (A2/A3/A5
+SP500/NASDAQ->AUD/NZD, B3 SP500->GBP) but ALL FOUR are artifacts:**
+- `signed_return_test` (the primary ECONOMIC test, s10) is ~0 for all four
+  (t = 0.4/-0.2/0.9/1.0).
+- Trimming 5% of predictor tails collapses the correlation from ~0.07 to ~0.00.
+- Directional **hit rate is BELOW 50%** (0.485-0.495).
+- i.e. the whole signal is a handful of big risk-on/off days co-moving across
+  the overnight gap — tail co-movement, not a directional edge. This is the s0.1
+  outlier diagnostic in REVERSE: a real effect strengthens under trimming; these
+  vanish.
+
+**The contemporaneous controls confirm the mechanism.** GOLD vs EURUSD in the
+SAME window: corr 0.40, t = 29.5. SP500 vs EURUSD same window: t = 4.5. The
+cross-asset link is strong CO-MOVEMENT and ~0 as a LEAD — exactly the
+contemporaneous-not-predictive thesis. This is the definitive answer to "do these
+datasets help": they explain the present, they do not predict the next session.
+
+**One hypothesis-generating observation (NOT a result — opposite to
+pre-registration, so reporting it as confirmed would be post-hoc sign-flipping).**
+The strongest *statistical* lead is a REVERSAL: US-afternoon risk-on ->
+JPY/CHF (havens) STRENGTHEN at the next open (A1 SP500->USDJPY t = -3.72, A4
+NASDAQ->USDJPY -3.61, B1 SP500->USDCHF -2.08). Unlike the survivors these HOLD
+under trimming (corr -0.07 -> -0.07) and have a coherent ~55% hit rate in the
+reversed direction. Mechanistically plausible (overnight profit-taking / partial
+mean-reversion of the risk move). If pursued it must be a FRESH pre-registration
+tested on untouched data (gold cells have 2003-2014; JPY/CHF cells only forward),
+and it is almost certainly cost-bound at USDJPY/USDCHF spreads anyway.
+
+**Verdict:** cross-asset series are added to the "ruled out as a LEAD" pile with
+the same rigor as the rest (s0.7). The London-open rule remains the only live
+candidate, and the next step is unchanged: instrumented micro-lot execution, not
+more features. h003 is a research battery on (already-searched) 2015-2022 data,
+so even the reversal is a candidate, not a green light — the green light still
+requires forward paper trading.
