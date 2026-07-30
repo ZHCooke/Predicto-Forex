@@ -2002,3 +2002,58 @@ candidate, and the next step is unchanged: instrumented micro-lot execution, not
 more features. h003 is a research battery on (already-searched) 2015-2022 data,
 so even the reversal is a candidate, not a green light — the green light still
 requires forward paper trading.
+
+---
+
+### 2026-07-30 (session 17) — Execution scaffold + a broker-cost correction
+
+Started building toward "usable": broker diligence and the paper/live execution
+harness. Built `src/live/` (strategy timing, commission model, broker abstraction
++ PaperBroker + LiveBroker stub, trade ledger) and `tests/test_live_execution.py`.
+221 tests passing.
+
+**A CORRECTION TO THE REPO'S COST STORY. The tick-measured 0.345 pips (s0.0d/e)
+is the raw bid-ask SPREAD only — it EXCLUDES commission**, which at a real broker
+is the dominant fixed cost. Verified fee schedules (July 2026):
+
+| broker | commission rt | US clients? |
+|---|---|---|
+| **IBKR** | **0.40 pips** (0.20 bps/side, $2 min) | **yes** |
+| IC Markets / Pepperstone | 0.70 pips ($3.50/100k/side) | **no** |
+| OANDA | ~1.0 pip (in the spread) | yes |
+
+Corrected all-in picture against the 1.314-pip selection-free edge (1 std lot):
+
+| scenario | mkt cost | comm | net | ~Sharpe |
+|---|---|---|---|---|
+| IBKR aggressive (cross spread) | +0.345 | 0.43 | +0.54 | ~0.35 |
+| **IBKR passive (earn spread)** | **-0.345** | 0.43 | **+1.23** | **~0.81** |
+| IC aggressive [not US] | +0.345 | 0.76 | +0.21 | ~0.14 |
+
+**Three conclusions:**
+1. **IBKR is the best (and best US-accessible) broker** — commission 0.40 vs 0.70
+   pips, transparent, no dealing-desk markup. CFTC/NFA limits US residents to
+   IBKR / OANDA / Forex.com / IG US / Schwab; IC & Pepperstone are off the table.
+2. **Commission, not spread, is now the binding cost, and it makes the order type
+   decisive.** IBKR AGGRESSIVE leaves only ~0.35 Sharpe (below the s8 bar);
+   IBKR PASSIVE clears it comfortably. So the live experiment's PRIMARY question
+   is not just slippage magnitude but **passive limit-order fill RATE** at the
+   London open — can we earn the spread often enough to beat commission?
+3. **The "$20-30 micro-lot experiment" (s0.0e) collides with IBKR's $2 minimum:
+   at 0.01 lots commission is 40 pips round trip.** Resolution baked into the
+   ledger: SLIPPAGE is a price effect (size-independent, measured at micro size),
+   COMMISSION is modelled from the fee schedule and PROJECTED to production size.
+   `Ledger.summary()` reports net at both traded and production size so a cheap
+   micro run speaks honestly to the real economics.
+
+**Scaffold state:** timing locks in the s0.0d correction (ENTER 09:00 London /
+EXIT 13:00, DST-aware, weekend-skip, all tested); PaperBroker models market vs
+passive-limit fills; LiveBroker is a deliberate stub (no real order until a
+broker is chosen and credentials supplied — per the project's own rule).
+
+**Next:** (a) decide jurisdiction/broker (IBKR unless non-US with a reason to use
+IC/Pepperstone); (b) implement the chosen LiveBroker connector; (c) run the
+paper ledger against live prices to validate timing/plumbing; (d) then micro-lot
+live to measure passive fill rate + market cost against the ~0.36-pip round-trip
+budget. Note demo accounts fill at quote and cannot answer (c)->(d)'s cost
+question (s0.0e).
