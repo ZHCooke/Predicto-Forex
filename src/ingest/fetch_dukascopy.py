@@ -46,6 +46,36 @@ INSTRUMENT_MAP: dict[str, str] = {
     "USDCHF": duka_instruments.INSTRUMENT_FX_MAJORS_USD_CHF,
     "USDCAD": duka_instruments.INSTRUMENT_FX_MAJORS_USD_CAD,
     "NZDUSD": duka_instruments.INSTRUMENT_FX_MAJORS_NZD_USD,
+    # Cross-asset series for the session-transmission lead study (CLAUDE.md s16).
+    # These are CFDs on the same Dukascopy feed, so they arrive timezone-aligned
+    # (UTC) to the FX bars — which is what lets a "US-session move" be defined on
+    # the same clock as the "European open" it is supposed to lead. History depth
+    # varies: GOLD reaches 2003, the equity indices and commodities start ~2012,
+    # so only GOLD has a genuine pre-2015 fresh-confirmation slice. VIX (2022),
+    # DXY (2017) and the bond CFDs (2018) are too short for 2015-2022 research
+    # and are deliberately excluded.
+    "SP500": duka_instruments.INSTRUMENT_IDX_AMERICA_E_SANDP_500,
+    "NASDAQ": duka_instruments.INSTRUMENT_IDX_AMERICA_E_NQ_100,
+    "DOW": duka_instruments.INSTRUMENT_IDX_AMERICA_E_D_J_IND,
+    "GOLD": duka_instruments.INSTRUMENT_FX_METALS_XAU_USD,
+    "WTI": duka_instruments.INSTRUMENT_CMD_ENERGY_E_LIGHT,
+    "BRENT": duka_instruments.INSTRUMENT_CMD_ENERGY_E_BRENT,
+    "COPPER": duka_instruments.INSTRUMENT_CMD_METALS_COPPER_CMD_USD,
+    "NATGAS": duka_instruments.INSTRUMENT_CMD_ENERGY_GAS_CMD_USD,
+}
+
+# Cross-asset predictors and the earliest date each is available on the feed
+# (measured by a daily probe, session 16). Used by the pull driver so it does
+# not waste calls fetching years that return nothing.
+CROSS_ASSET_START: dict[str, date] = {
+    "SP500": date(2012, 1, 1),
+    "NASDAQ": date(2012, 1, 1),
+    "DOW": date(2012, 4, 1),
+    "GOLD": date(2003, 5, 1),
+    "WTI": date(2011, 11, 1),
+    "BRENT": date(2010, 12, 1),
+    "COPPER": date(2012, 3, 1),
+    "NATGAS": date(2012, 6, 1),
 }
 
 # Which currency is base vs quote in each pair's quoting convention. Needed to
